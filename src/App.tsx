@@ -154,8 +154,8 @@ export default function App() {
       <TaskTimer />
       <main className={`flex-1 overflow-y-auto overflow-x-hidden ${isLandscape ? 'ml-16' : ''}`}
         style={{ paddingBottom: isLandscape ? '0' : 'calc(56px + env(safe-area-inset-bottom, 0px))' }}>
-        {/* Desktop container wrapper để tối ưu layout trên màn hình rộng */}
-        <div className="w-full max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8">
+        {/* Desktop container wrapper - chiếm hết chiều rộng màn hình */}
+        <div className="w-full h-full px-3 sm:px-4 md:px-6">
           {renderPage()}
         </div>
       </main>
