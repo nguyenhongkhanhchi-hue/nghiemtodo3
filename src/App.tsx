@@ -154,14 +154,17 @@ export default function App() {
       <TaskTimer />
       <main className={`flex-1 overflow-y-auto overflow-x-hidden ${isLandscape ? 'ml-16' : ''}`}
         style={{ paddingBottom: isLandscape ? '0' : 'calc(56px + env(safe-area-inset-bottom, 0px))' }}>
-        {renderPage()}
+        {/* Desktop container wrapper để tối ưu layout trên màn hình rộng */}
+        <div className="w-full max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8">
+          {renderPage()}
+        </div>
       </main>
       <BottomNav />
-      <UnifiedFAB 
+      <UnifiedFAB
         onAddTask={() => setShowAddTask(true)}
         onAddSingleTemplate={() => { setTemplateMode('single'); setShowTemplateEditor(true); }}
         onAddGroupTemplate={() => { setTemplateMode('group'); setShowTemplateEditor(true); }}
-        onOpenLucy={() => setShowLucy(!showLucy)} 
+        onOpenLucy={() => setShowLucy(!showLucy)}
         showLucy={showLucy}
       />
       {showAddTask && <AddTaskSheet onClose={() => setShowAddTask(false)} />}
