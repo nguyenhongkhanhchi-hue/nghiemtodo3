@@ -1,5 +1,5 @@
 import { useSettingsStore, useTaskStore, useAuthStore } from '@/stores';
-import { CheckSquare, FileText, BarChart3, Bell, Settings } from 'lucide-react';
+import { CheckSquare, FileText, BarChart3, Bell, Settings, Clock } from 'lucide-react';
 import { isTaskOverdue } from '@/lib/autoQuadrant';
 import type { PageType } from '@/types';
 
@@ -11,10 +11,11 @@ export function BottomNav() {
   const user = useAuthStore(s => s.user);
   const isAdmin = user?.id === 'admin';
 
-  // Simplified nav: VIỆC, MẪU, THỐNG KÊ (Thu chi + Thành tích), CÀI ĐẶT (Admin)
+  // Simplified nav: VIỆC, MẪU, CHI PHÍ, THỐNG KÊ (Thu chi + Thành tích), CÀI ĐẶT (Admin)
   const NAV_ITEMS: { page: PageType; icon: typeof CheckSquare; label: string; adminOnly?: boolean }[] = [
     { page: 'tasks', icon: CheckSquare, label: 'Việc' },
     { page: 'templates', icon: FileText, label: 'Mẫu' },
+    { page: 'timecost', icon: Clock, label: 'Chi phí' },
     { page: 'stats', icon: BarChart3, label: 'Thống kê' },
     { page: 'settings', icon: Settings, label: 'Cài đặt' },
   ].filter(item => !item.adminOnly || isAdmin);

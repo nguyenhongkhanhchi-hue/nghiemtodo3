@@ -4,7 +4,7 @@ import type {
   EisenhowerQuadrant, RecurringConfig, UserProfile,
   GamificationState, NotificationSettings, Reward,
   TaskTemplate, TaskFinance, Achievement, Topic, VoiceSettings,
-  TaskCategory, ThemeMode,
+  TaskCategory, ThemeMode, TimeLog, TimeLogType,
 } from '@/types';
 import { DEFAULT_VOICE_SETTINGS } from '@/types';
 import { calculateLevel, checkAchievement, getDefaultGamificationState } from '@/lib/gamification';
@@ -354,7 +354,6 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   },
 }));
 
-// [Rest của file giữ nguyên - chỉ đổi tên method markOverdue → checkAndMarkOverdue]
 // ──────────── TOPIC STORE ────────────
 interface TopicStore {
   topics: Topic[];
@@ -699,7 +698,73 @@ export const useGamificationStore = create<GamificationStore>((set, get) => ({
   },
 }));
 
+// ──────────── TIME LOG STORE ────────────
+interface TimeLogStore {
+  timeLogs: TimeLog[];
+  _userId: string | undefined;
+  initForUser: (userId?: string) => void;
+  addTimeLog: (log: Omit<TimeLog, 'id' | 'createdAt'>) => void;
+  updateTimeLog: (id: string, updates: Partial<TimeLog>) => void;
+  removeTimeLog: (id: string) => void;
+  getLogsForDate: (date: string) => TimeLog[];
+  getTimeLogsForDate: (date: string) => TimeLog[];
+}
+
+export const useTimeLogStore = create<TimeLogStore>((set, get) => ({
+  timeLogs: [],
+  _userId: undefined,
+
+  initForUser: async (userId) => {
+    const logs = loadFromStorage<TimeLog[]>(getUserKey('nw_time_logs', userId), []);
+    set({ timeLogs: logs, _userId: userId });
+  },
+
+  addTimeLog: (log) => {
+    const userId = get()._userId;
+    const newLog: TimeLog = {
+      ...log,
+      id: generateId(),
+      createdAt: Date.now(),
+    };
+    const updated = [...get().timeLogs, newLog];
+    saveToStorage(getUserKey('nw_time_logs', userId), updated);
+    set({ timeLogs: updated });
+  },
+
+  updateTimeLog: (id, updates) => {
+    const userId = get()._userId;
+    const updated = get().timeLogs.map(log => 
+      log.id === id ? { ...log, ...updates } : log
+    );
+    saveToStorage(getUserKey('nw_time_logs', userId), updated);
+    set({ timeLogs: updated });
+  },
+
+  removeTimeLog: (id) => {
+    const userId = get()._userId;
+    const updated = get().timeLogs.filter(log => log.id !== id);
+    saveToStorage(getUserKey('nw_time_logs', userId), updated);
+    set({ timeLogs: updated });
+  },
+
+  getLogsForDate: (date) => {
+    return get().timeLogs.filter(log => log.date === date);
+  },
+  getTimeLogsForDate: (date) => {
+    return get().timeLogs.filter(log => log.date === date);
+  },
+}));
+
 // ──────────── SETTINGS STORE ────────────
+interface AdditionalCost {
+  id: string;
+  type: 'money' | 'energy' | 'mental';
+  amount: number; // For money: VND, For energy/mental: 1-10 scale
+  description: string;
+  date: string; // YYYY-MM-DD
+  createdAt: number;
+}
+
 interface SettingsStore {
   fontScale: number;
   tickSoundEnabled: boolean;
@@ -711,6 +776,12 @@ interface SettingsStore {
   notificationSettings: NotificationSettings;
   voiceSettings: VoiceSettings;
   theme: ThemeMode;
+  // Time Cost Settings
+  dailyTimeCost: number;      // VND per day (default 2,000,000)
+  sleepHours: number;          // Hours of sleep per day (default 7)
+  workingHours: number;        // Working hours per day (default 8)
+  // Additional Costs
+  additionalCosts: AdditionalCost[];
   setFontScale: (scale: number) => void;
   setTickSound: (enabled: boolean) => void;
   setVoiceEnabled: (enabled: boolean) => void;
@@ -721,6 +792,11 @@ interface SettingsStore {
   setNotificationSettings: (settings: Partial<NotificationSettings>) => void;
   setVoiceSettings: (settings: Partial<VoiceSettings>) => void;
   setTheme: (theme: ThemeMode) => void;
+  setDailyTimeCost: (cost: number) => void;
+  setSleepHours: (hours: number) => void;
+  setWorkingHours: (hours: number) => void;
+  addAdditionalCost: (cost: AdditionalCost) => void;
+  removeAdditionalCost: (id: string) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>((set) => ({
@@ -734,6 +810,10 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   voiceSettings: loadFromStorage<VoiceSettings>('nw_voicesettings', DEFAULT_VOICE_SETTINGS),
   theme: loadFromStorage<ThemeMode>('nw_theme', 'dark'),
   currentPage: 'tasks',
+  dailyTimeCost: loadFromStorage<number>('nw_daily_time_cost', 2000000),
+  sleepHours: loadFromStorage<number>('nw_sleep_hours', 7),
+  workingHours: loadFromStorage<number>('nw_working_hours', 8),
+  additionalCosts: loadFromStorage<AdditionalCost[]>('nw_additional_costs', []),
   setFontScale: (scale) => {
     const safe = Math.max(0.75, Math.min(1.5, scale));
     saveToStorage('nw_fontscale', safe);
@@ -773,5 +853,34 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     saveToStorage('nw_theme', theme);
     document.documentElement.setAttribute('data-theme', theme);
     set({ theme });
+  },
+  setDailyTimeCost: (cost) => {
+    saveToStorage('nw_daily_time_cost', cost);
+    set({ dailyTimeCost: cost });
+  },
+  setSleepHours: (hours) => {
+    const safe = Math.max(0, Math.min(24, hours));
+    saveToStorage('nw_sleep_hours', safe);
+    set({ sleepHours: safe });
+  },
+  setWorkingHours: (hours) => {
+    const safe = Math.max(0, Math.min(24, hours));
+    saveToStorage('nw_working_hours', safe);
+    set({ workingHours: safe });
+  },
+  addAdditionalCost: (cost) => {
+    const newCost: AdditionalCost = { ...cost, id: generateId(), createdAt: Date.now() };
+    set((prev) => {
+      const updated = [...prev.additionalCosts, newCost];
+      saveToStorage('nw_additional_costs', updated);
+      return { additionalCosts: updated };
+    });
+  },
+  removeAdditionalCost: (id) => {
+    set((prev) => {
+      const updated = prev.additionalCosts.filter(c => c.id !== id);
+      saveToStorage('nw_additional_costs', updated);
+      return { additionalCosts: updated };
+    });
   },
 }));

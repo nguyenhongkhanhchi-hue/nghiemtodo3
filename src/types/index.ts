@@ -2,7 +2,7 @@ export type EisenhowerQuadrant = 'do_first' | 'schedule' | 'delegate' | 'elimina
 export type TaskStatus = 'pending' | 'in_progress' | 'paused' | 'done' | 'overdue';
 export type RecurringType = 'none' | 'daily' | 'weekdays' | 'weekly' | 'biweekly' | 'monthly' | 'custom';
 export type TabType = 'pending' | 'in_progress' | 'paused' | 'done' | 'overdue';
-export type PageType = 'tasks' | 'stats' | 'settings' | 'achievements' | 'templates' | 'finance' | 'chat' | 'admin' | 'notifications';
+export type PageType = 'tasks' | 'stats' | 'settings' | 'achievements' | 'templates' | 'finance' | 'chat' | 'admin' | 'notifications' | 'timecost';
 export type TaskCategory = 'work' | 'personal' | 'health' | 'learning' | 'finance' | 'social' | 'other';
 export type ThemeMode = 'dark' | 'light';
 export type UserRole = 'admin' | 'user' | 'blocked';
@@ -108,6 +108,22 @@ export interface TimerState {
   startTime: number | null;
   pausedAt: number | null;
   totalPausedDuration: number;
+}
+
+// Time Log - for tracking manual time entries and sleep
+export type TimeLogType = 'activity' | 'sleep' | 'break' | 'other';
+
+export interface TimeLog {
+  id: string;
+  type: TimeLogType;
+  title: string; // Description of the activity
+  startTime: number; // Timestamp in milliseconds
+  endTime: number; // Timestamp in milliseconds
+  duration: number; // Duration in seconds
+  date: string; // YYYY-MM-DD format
+  taskId?: string; // Optional link to a task
+  notes?: string;
+  createdAt: number;
 }
 
 export interface ChatMessage {

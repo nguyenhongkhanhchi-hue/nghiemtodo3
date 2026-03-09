@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useSettingsStore, useAuthStore, useTaskStore, useChatStore, useGamificationStore, useTemplateStore, useTopicStore } from '@/stores';
+import { useSettingsStore, useAuthStore, useTaskStore, useChatStore, useGamificationStore, useTemplateStore, useTopicStore, useTimeLogStore } from '@/stores';
 import { supabase } from '@/lib/supabase';
 import { checkDeadlineNotifications } from '@/lib/notifications';
 import { getTriggeredReminders } from '@/lib/remindersManager';
@@ -15,6 +15,7 @@ import { AddTaskSheet } from '@/components/features/AddTaskInput';
 import TasksPage from '@/pages/TasksPage';
 import StatsPage from '@/pages/StatsPage';
 import SettingsPage from '@/pages/SettingsPage';
+import TimeCostPage from '@/pages/TimeCostPage';
 import AchievementsPage from '@/pages/AchievementsPage';
 import AuthPage from '@/pages/AuthPage';
 import TemplatesPage from '@/pages/TemplatesPage';
@@ -40,6 +41,7 @@ export default function App() {
   const initGam = useGamificationStore(s => s.initForUser);
   const initTemplates = useTemplateStore(s => s.initForUser);
   const initTopics = useTopicStore(s => s.initForUser);
+  const initTimeLogs = useTimeLogStore(s => s.initForUser);
   const tasks = useTaskStore(s => s.tasks);
   const checkAndMarkOverdue = useTaskStore(s => s.checkAndMarkOverdue);
   const [isLandscape, setIsLandscape] = useState(false);
@@ -147,7 +149,7 @@ export default function App() {
   useEffect(() => {
     if (user) {
       const uid = user.id === 'admin' ? 'admin' : user.id;
-      initTasks(uid); initChat(uid); initGam(uid); initTemplates(uid); initTopics(uid);
+      initTasks(uid); initChat(uid); initGam(uid); initTemplates(uid); initTopics(uid); initTimeLogs(uid);
     }
   }, [user?.id]);
 
@@ -199,6 +201,7 @@ export default function App() {
       case 'tasks': return <TasksPage />;
       case 'stats': return <StatsPage />;
       case 'settings': return <SettingsPage />;
+      case 'timecost': return <TimeCostPage />;
       case 'templates': return <TemplatesPage 
         externalEditorOpen={showTemplateEditor}
         externalEditorMode={templateMode}
