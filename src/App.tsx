@@ -28,6 +28,8 @@ export default function App() {
   const currentPage = useSettingsStore(s => s.currentPage);
   const fontScale = useSettingsStore(s => s.fontScale);
   const timezone = useSettingsStore(s => s.timezone);
+  const screenBrightness = useSettingsStore(s => s.screenBrightness);
+  const lockTouch = useSettingsStore(s => s.lockTouch);
   const notificationSettings = useSettingsStore(s => s.notificationSettings);
   const user = useAuthStore(s => s.user);
   const isLoading = useAuthStore(s => s.isLoading);
@@ -53,13 +55,11 @@ export default function App() {
   // Font scale
   useEffect(() => { document.documentElement.style.setProperty('--font-scale', String(fontScale)); }, [fontScale]);
 
-  // Screen brightness
+  // Screen brightness & lock — reactively update CSS/class when store changes
   useEffect(() => {
-    const screenBrightness = useSettingsStore.getState().screenBrightness;
-    const lockTouch = useSettingsStore.getState().lockTouch;
     document.documentElement.style.setProperty('--screen-brightness', `${screenBrightness}%`);
     document.documentElement.classList.toggle('lock-touch', lockTouch);
-  }, []);
+  }, [screenBrightness, lockTouch]);
 
   // Detect orientation
   useEffect(() => {
@@ -201,6 +201,24 @@ export default function App() {
 
   return (
     <div className={`min-h-[100dvh] flex bg-[var(--bg-base)] overflow-x-hidden ${isLandscape ? 'flex-row' : 'flex-col'}`}>
+      {/* Screen dim + lock overlay */}
+      {lockTouch && (
+        <div
+          className="fixed inset-0 z-[9999] flex flex-col items-center justify-center select-none"
+          style={{
+            background: `rgba(0,0,0,${1 - screenBrightness / 100})`,
+            touchAction: 'none',
+          }}
+        >
+          <div className="flex flex-col items-center gap-3 text-white/60 pointer-events-none">
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <p className="text-sm font-medium">Vuốt để mở khóa</p>
+          </div>
+        </div>
+      )}
       <ToastContainer />
       <TaskTimer />
       <main className={`flex-1 overflow-y-auto overflow-x-hidden ${isLandscape ? 'ml-16' : ''}`}

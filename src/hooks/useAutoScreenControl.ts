@@ -1,116 +1,122 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useSettingsStore } from '@/stores';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 const INACTIVITY_DELAY = 5000; // 5 seconds
-const REDUCED_BRIGHTNESS = 5; // 5% brightness when dimmed
+const REDUCED_BRIGHTNESS = 5;  // 5% brightness when dimmed
 const NORMAL_BRIGHTNESS = 100;
-const SWIPE_THRESHOLD = 100; // Minimum swipe distance in pixels
+const SWIPE_THRESHOLD = 80;    // Minimum swipe distance in pixels
 
 export function useAutoScreenControl() {
   const isMobile = useIsMobile();
-  const inactivityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const inactivityTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
-  const screenBrightness = useSettingsStore(s => s.screenBrightness);
-  const lockTouch = useSettingsStore(s => s.lockTouch);
-  const setScreenBrightness = useSettingsStore(s => s.setScreenBrightness);
-  const setLockTouch = useSettingsStore(s => s.setLockTouch);
   const isInactiveRef = useRef(false);
 
-  // Only apply auto screen control on mobile devices
-  if (!isMobile) {
-    return;
-  }
+  // Stable refs to store callbacks to avoid stale closure in event listeners
+  const setScreenBrightness = useSettingsStore(s => s.setScreenBrightness);
+  const setLockTouch = useSettingsStore(s => s.setLockTouch);
 
-  const restoreScreen = () => {
-    setScreenBrightness(NORMAL_BRIGHTNESS);
-    setLockTouch(false);
+  const setScreenBrightnessRef = useRef(setScreenBrightness);
+  const setLockTouchRef = useRef(setLockTouch);
+  setScreenBrightnessRef.current = setScreenBrightness;
+  setLockTouchRef.current = setLockTouch;
+
+  const restoreScreen = useCallback(() => {
+    setScreenBrightnessRef.current(NORMAL_BRIGHTNESS);
+    setLockTouchRef.current(false);
     isInactiveRef.current = false;
-  };
+  }, []);
 
-  const resetInactivityTimer = () => {
-    // Clear existing inactivity timer
+  const resetInactivityTimer = useCallback(() => {
     if (inactivityTimeoutRef.current) {
       clearTimeout(inactivityTimeoutRef.current);
     }
 
-    // If was inactive, restore to normal
     if (isInactiveRef.current) {
       restoreScreen();
     }
 
-    // Set new inactivity timeout
     inactivityTimeoutRef.current = setTimeout(() => {
-      setScreenBrightness(REDUCED_BRIGHTNESS);
-      setLockTouch(true);
+      setScreenBrightnessRef.current(REDUCED_BRIGHTNESS);
+      setLockTouchRef.current(true);
       isInactiveRef.current = true;
     }, INACTIVITY_DELAY);
-  };
-
-  const handleTouchStart = (e: TouchEvent) => {
-    // If screen is not dimmed, just reset inactivity timer
-    if (!isInactiveRef.current) {
-      resetInactivityTimer();
-      return;
-    }
-
-    // Screen is dimmed - record touch start position for swipe detection
-    const touch = e.touches[0];
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
-  };
-
-  const handleTouchEnd = (e: TouchEvent) => {
-    // If screen is not dimmed, do nothing
-    if (!isInactiveRef.current || !touchStartRef.current) {
-      return;
-    }
-
-    // Calculate swipe distance
-    const touch = e.changedTouches[0];
-    const deltaX = touch.clientX - touchStartRef.current.x;
-    const deltaY = touch.clientY - touchStartRef.current.y;
-    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-
-    // If swipe distance is enough, unlock the screen
-    if (distance >= SWIPE_THRESHOLD) {
-      restoreScreen();
-    }
-
-    // Reset touch start position
-    touchStartRef.current = null;
-  };
-
-  const handleOtherActivity = () => {
-    // Non-touch activity (mouse, keyboard) - only work if not dimmed
-    if (!isInactiveRef.current) {
-      resetInactivityTimer();
-    }
-  };
+  }, [restoreScreen]);
 
   useEffect(() => {
-    // Start initial timer
+    // Only apply on mobile/tablet
+    if (!isMobile) return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (!isInactiveRef.current) {
+        // Screen is active — reset timer on any touch
+        resetInactivityTimer();
+        return;
+      }
+      // Screen is dimmed/locked — record start position for swipe unlock
+      const touch = e.touches[0];
+      touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+      // Prevent propagation so locked UI doesn't receive the touch
+      e.stopPropagation();
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (isInactiveRef.current) {
+        // Prevent scrolling while locked
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (!isInactiveRef.current) return;
+
+      e.stopPropagation();
+
+      if (!touchStartRef.current) return;
+
+      const touch = e.changedTouches[0];
+      const deltaX = touch.clientX - touchStartRef.current.x;
+      const deltaY = touch.clientY - touchStartRef.current.y;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+      if (distance >= SWIPE_THRESHOLD) {
+        restoreScreen();
+        resetInactivityTimer();
+      }
+
+      touchStartRef.current = null;
+    };
+
+    const handleActivity = () => {
+      if (!isInactiveRef.current) {
+        resetInactivityTimer();
+      }
+    };
+
+    // Start inactivity timer
     resetInactivityTimer();
 
-    // Add listeners for touch (hold detection)
-    window.addEventListener('touchstart', handleTouchStart, true);
-    window.addEventListener('touchend', handleTouchEnd, true);
-
-    // Mouse/keyboard only reset timer if not dimmed
-    window.addEventListener('mousedown', handleOtherActivity, true);
-    window.addEventListener('click', handleOtherActivity, true);
-    window.addEventListener('keydown', handleOtherActivity, true);
+    window.addEventListener('touchstart', handleTouchStart, { capture: true, passive: false });
+    window.addEventListener('touchmove', handleTouchMove, { capture: true, passive: false });
+    window.addEventListener('touchend', handleTouchEnd, { capture: true, passive: false });
+    window.addEventListener('mousedown', handleActivity, true);
+    window.addEventListener('keydown', handleActivity, true);
 
     return () => {
-      // Cleanup
       if (inactivityTimeoutRef.current) {
         clearTimeout(inactivityTimeoutRef.current);
       }
-
       window.removeEventListener('touchstart', handleTouchStart, true);
+      window.removeEventListener('touchmove', handleTouchMove, true);
       window.removeEventListener('touchend', handleTouchEnd, true);
-      window.removeEventListener('mousedown', handleOtherActivity, true);
-      window.removeEventListener('click', handleOtherActivity, true);
-      window.removeEventListener('keydown', handleOtherActivity, true);
+      window.removeEventListener('mousedown', handleActivity, true);
+      window.removeEventListener('keydown', handleActivity, true);
+
+      // Restore screen on unmount
+      setScreenBrightnessRef.current(NORMAL_BRIGHTNESS);
+      setLockTouchRef.current(false);
     };
-  }, [setScreenBrightness, setLockTouch]);
+  }, [isMobile, resetInactivityTimer, restoreScreen]);
 }

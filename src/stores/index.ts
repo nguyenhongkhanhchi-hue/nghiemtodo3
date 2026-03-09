@@ -721,7 +721,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   setTickSound: (e) => { saveToStorage('nw_tick', e); set({ tickSoundEnabled: e }); },
   setVoiceEnabled: (e) => { saveToStorage('nw_voice', e); set({ voiceEnabled: e }); },
   setScreenBrightness: (brightness) => {
-    const safe = Math.max(10, Math.min(100, brightness));
+    const safe = Math.max(5, Math.min(100, brightness));
     saveToStorage('nw_brightness', safe);
     document.documentElement.style.setProperty('--screen-brightness', `${safe}%`);
     set({ screenBrightness: safe });
