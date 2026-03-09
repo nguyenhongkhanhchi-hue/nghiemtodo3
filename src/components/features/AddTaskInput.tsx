@@ -234,7 +234,7 @@ export function AddTaskSheet({ onClose }: { onClose: () => void }) {
             <div className="space-y-2 pt-3">
               {/* New format: multiple finance items with categories - now default */}
               <div className="space-y-2">
-                /* New format: multiple finance items with categories */
+                {/* New format: multiple finance items with categories */}
                 <div className="space-y-2">
                   {financeItems.map((item, idx) => (
                     <div key={idx} className="bg-[var(--bg-elevated)] p-2 rounded-lg border border-[var(--border-subtle)] space-y-2">
@@ -290,6 +290,7 @@ export function AddTaskSheet({ onClose }: { onClose: () => void }) {
                     <Plus size={14} /> Thêm khoản thu/chi
                   </button>
                 </div>
+              </div>
             </div>
           </CollapsibleOption>
 

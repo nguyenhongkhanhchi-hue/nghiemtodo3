@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { useTaskStore, useSettingsStore, useTimeLogStore } from '@/stores';
-import type { FinanceCategory } from '@/stores';
 import { getNowInTimezone } from '@/lib/notifications';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -57,7 +56,6 @@ export default function TimeCostPage() {
   const timer = useTaskStore(s => s.timer);
   const timeLogs = useTimeLogStore(s => s.timeLogs);
   const { timezone, dailyTimeCost } = useSettingsStore();
-  const financeCategories = useSettingsStore(s => s.financeCategories);
   const [period, setPeriod] = useState<Period>('month');
   const [view, setView] = useState<ViewMode>('overview');
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
@@ -450,229 +448,303 @@ export default function TimeCostPage() {
     };
   };
 
-  // Helper to render a day's cash flow (used for both today and selected past day)
-  const renderDayFlow = (
-    date: Date,
-    incomeTxList: any[],
-    expenseTxList: any[],
-    incomeTotal: number,
-    expenseTotal: number,
-    timeCostDay: number,
-    trueNet: number,
-    trackedSec: number,
-    isSelected?: boolean
-  ) => {
-    const needed = timeCostDay + expenseTotal - incomeTotal;
-    return (
-      <>
-        {/* Net result */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <p className="text-[10px] text-[var(--text-muted)] mb-0.5 uppercase tracking-wide">Thực nhận</p>
-            <p className={`text-2xl font-black font-mono tabular-nums leading-none ${trueNet >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
-              {trueNet >= 0 ? '+' : '-'}{Math.floor(Math.abs(trueNet)).toLocaleString('vi-VN')}đ
-            </p>
-          </div>
-          <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${trueNet >= 0 ? 'bg-[rgba(52,211,153,0.15)] text-[var(--success)]' : 'bg-[rgba(248,113,113,0.15)] text-[var(--error)]'}`}>
-            {trueNet >= 0 ? '▲ CÓ LÃI' : '▼ ĐANG LỖ'}
-          </span>
-        </div>
-
-        {/* Income */}
-        <div className="mb-3">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[11px] font-bold text-[var(--success)]">KHOẢN THU</span>
-            <span className="text-[11px] font-mono font-bold text-[var(--success)]">+{Math.floor(incomeTotal).toLocaleString('vi-VN')}đ</span>
-          </div>
-          {incomeTxList.length === 0 ? (
-            <p className="text-[10px] text-[var(--text-muted)] italic">Chưa có khoản thu</p>
-          ) : (
-            <div className="space-y-1">
-              {incomeTxList.map((tx: any, i: number) => {
-                const cat = financeCategories.find((c: FinanceCategory) => c.name === tx.note || c.id === tx.category);
-                return (
-                  <div key={tx.id || i} className="flex items-center justify-between px-3 py-2 rounded-xl bg-[var(--bg-surface)]">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm flex-shrink-0">{cat?.icon || CATEGORY_CONFIG[tx.category]?.icon || '💰'}</span>
-                      <span className="text-[11px] text-[var(--text-primary)] truncate">{tx.note}</span>
-                    </div>
-                    <span className="text-[11px] font-mono font-bold text-[var(--success)] ml-2 flex-shrink-0">+{Math.floor(tx.amount).toLocaleString('vi-VN')}đ</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="border-t border-[var(--border-subtle)] my-3" />
-
-        {/* Expense */}
-        <div className="mb-3">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[11px] font-bold text-[var(--error)]">KHOẢN CHI</span>
-            <span className="text-[11px] font-mono font-bold text-[var(--error)]">-{Math.floor(expenseTotal + timeCostDay).toLocaleString('vi-VN')}đ</span>
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-[var(--bg-surface)]">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-sm flex-shrink-0">⏱</span>
-                <span className="text-[11px] text-[var(--text-primary)]">Chi phí thời gian</span>
-              </div>
-              <span className="text-[11px] font-mono font-bold text-[var(--error)] ml-2 flex-shrink-0">-{Math.floor(timeCostDay).toLocaleString('vi-VN')}đ</span>
-            </div>
-            {expenseTxList.map((tx: any, i: number) => {
-              const cat = financeCategories.find((c: FinanceCategory) => c.name === tx.note || c.id === tx.category);
-              return (
-                <div key={tx.id || i} className="flex items-center justify-between px-3 py-2 rounded-xl bg-[var(--bg-surface)]">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-sm flex-shrink-0">{cat?.icon || CATEGORY_CONFIG[tx.category]?.icon || '💸'}</span>
-                    <span className="text-[11px] text-[var(--text-primary)] truncate">{tx.note}</span>
-                  </div>
-                  <span className="text-[11px] font-mono font-bold text-[var(--error)] ml-2 flex-shrink-0">-{Math.floor(tx.amount).toLocaleString('vi-VN')}đ</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Suggestion */}
-        {trueNet < 0 && (
-          <div className="px-3 py-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
-            <p className="text-[10px] text-[var(--text-muted)]">
-              💡 Cần thu thêm <span className="font-mono font-bold text-[var(--warning)]">+{Math.floor(needed).toLocaleString('vi-VN')}đ</span> để hòa vốn
-            </p>
-          </div>
-        )}
-      </>
-    );
-  };
-
   return (
     <div className="flex flex-col h-full pb-24 overflow-y-auto">
       {/* Header */}
       <div className="sticky top-0 z-10 glass-strong border-b border-[var(--border-subtle)] px-4 pt-4 pb-3">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-bold text-[var(--text-primary)]">Dòng Tiền</h1>
-          <button
-            onClick={() => setShowDatePicker(v => !v)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-          >
-            <CalendarIcon size={13} />
-            {now.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-          </button>
+          <div>
+            <h1 className="text-xl font-bold text-[var(--text-primary)]">Dòng Tiền</h1>
+            <p className="text-[10px] text-[var(--text-muted)]">Quản lý Tài chính & Thời gian</p>
+          </div>
         </div>
       </div>
 
-      {/* Date Picker Overlay */}
-      {showDatePicker && <div className="fixed inset-0 z-40" onClick={() => setShowDatePicker(false)} />}
-      {showDatePicker && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl shadow-2xl p-4 w-72" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between mb-3">
-            <button onClick={() => setDatePickerMonth(d => { const n = new Date(d); n.setMonth(n.getMonth()-1); return n; })} className="p-1.5 hover:bg-[var(--bg-surface)] rounded-lg">
-              <ChevronLeft size={14} className="text-[var(--text-secondary)]" />
-            </button>
-            <span className="text-xs font-bold text-[var(--text-primary)]">Tháng {datePickerMonth.getMonth()+1}/{datePickerMonth.getFullYear()}</span>
-            <button onClick={() => setDatePickerMonth(d => { const n = new Date(d); n.setMonth(n.getMonth()+1); return n; })} className="p-1.5 hover:bg-[var(--bg-surface)] rounded-lg" disabled={datePickerMonth.getMonth() >= now.getMonth() && datePickerMonth.getFullYear() >= now.getFullYear()}>
-              <ChevronRight size={14} className={datePickerMonth.getMonth() >= now.getMonth() && datePickerMonth.getFullYear() >= now.getFullYear() ? 'opacity-20' : 'text-[var(--text-secondary)]'} />
-            </button>
-          </div>
-          <div className="grid grid-cols-7 gap-0.5 text-center mb-1">
-            {['T2','T3','T4','T5','T6','T7','CN'].map(d => <div key={d} className="text-[9px] text-[var(--text-muted)] py-0.5">{d}</div>)}
-          </div>
-          <div className="grid grid-cols-7 gap-0.5">
-            {getDaysInMonth(datePickerMonth).map((d, i) => {
-              if (!d) return <div key={i} />;
-              const isPast = d <= now;
-              const isToday = d.toDateString() === now.toDateString();
-              const isSelected = selectedDay && new Date(selectedDay).toDateString() === d.toDateString();
-              return (
-                <button key={i} disabled={!isPast}
-                  onClick={() => openDateInCalendar(d)}
-                  className={`aspect-square rounded-lg text-[11px] font-medium transition-all ${
-                    isSelected ? 'bg-[var(--accent-primary)] text-white' :
-                    isToday ? 'ring-1 ring-[var(--accent-primary)] text-[var(--accent-primary)]' :
-                    isPast ? 'hover:bg-[var(--accent-dim)] text-[var(--text-primary)]' :
-                    'text-[var(--text-muted)] opacity-30'
-                  }`}>
-                  {d.getDate()}
-                </button>
-              );
-            })}
-          </div>
-          <button onClick={() => { setSelectedDay(null); setShowDatePicker(false); }} className="w-full mt-3 text-[10px] text-[var(--text-muted)] py-1.5 hover:text-[var(--text-primary)] border-t border-[var(--border-subtle)]">
-            Xem hôm nay
-          </button>
-        </div>
-      )}
-
       <div className="px-4 pt-4 space-y-4">
-        {/* ── SELECTED DAY OR TODAY ── */}
-        {(() => {
-          const isViewingPast = selectedDay && new Date(selectedDay).toDateString() !== now.toDateString();
-          if (isViewingPast) {
-            const date = new Date(selectedDay!);
-            const ds = getDayStats(date);
-            const incomeTxList = ds.txs.filter((tx: any) => tx.type === 'income');
-            const expenseTxList = ds.txs.filter((tx: any) => tx.type === 'expense');
-            return (
-              <div className="bg-[var(--bg-elevated)] rounded-2xl p-4 border border-[var(--border-subtle)]">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide">Ngày đã chọn</p>
-                    <p className="text-sm font-bold text-[var(--text-primary)]">
-                      {date.toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+
+        {/* ── OVERVIEW TAB ── */}
+        {view === 'overview' && (
+          <>
+            {/* Today Summary Section - Redesigned */}
+            <div className="space-y-3">
+              <div className="bg-[var(--bg-elevated)] rounded-2xl p-5 border border-[var(--border-subtle)] relative overflow-hidden shadow-sm">
+                {/* Background Decor */}
+                <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--accent-primary)] opacity-[0.03] rounded-full -translate-y-1/2 translate-x-1/2" />
+                
+                <div className="flex items-center justify-between mb-5 relative">
+                  <div className="flex items-center gap-3">
+                  <button onClick={() => setShowDatePicker(v => !v)}
+                    className="size-10 rounded-2xl bg-[var(--accent-dim)] flex items-center justify-center text-[var(--accent-primary)] hover:scale-105 transition-transform">
+                    <Zap size={20} />
+                  </button>
+                  <div className="cursor-pointer" onClick={() => setShowDatePicker(v => !v)}>
+                    <h2 className="text-sm font-bold text-[var(--text-primary)] hover:text-[var(--accent-primary)] transition-colors">HÔM NAY</h2>
+                    <p className="text-[10px] text-[var(--text-muted)] font-medium">
+                      {now.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit' })}
                     </p>
                   </div>
-                  <button onClick={() => setSelectedDay(null)} className="size-8 rounded-xl bg-[var(--bg-surface)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-                    <X size={15} />
-                  </button>
+                  </div>
+  
+                  {/* Date Picker Popup */}
+                  {showDatePicker && (
+                    <div className="fixed inset-0 z-40" onClick={() => setShowDatePicker(false)} />
+                  )}
+                  {showDatePicker && (
+                    <div className="absolute top-14 left-4 z-50 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl shadow-2xl p-3 min-w-[280px]" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between mb-2">
+                      <button onClick={() => setDatePickerMonth(d => { const n = new Date(d); n.setMonth(n.getMonth()-1); return n; })} className="p-1.5 hover:bg-[var(--bg-surface)] rounded-lg">
+                        <ChevronLeft size={14} className="text-[var(--text-secondary)]" />
+                      </button>
+                      <span className="text-xs font-bold text-[var(--text-primary)]">Tháng {datePickerMonth.getMonth()+1}/{datePickerMonth.getFullYear()}</span>
+                      <button onClick={() => setDatePickerMonth(d => { const n = new Date(d); n.setMonth(n.getMonth()+1); return n; })} className="p-1.5 hover:bg-[var(--bg-surface)] rounded-lg" disabled={datePickerMonth.getMonth() >= now.getMonth() && datePickerMonth.getFullYear() >= now.getFullYear()}>
+                        <ChevronRight size={14} className={datePickerMonth.getMonth() >= now.getMonth() && datePickerMonth.getFullYear() >= now.getFullYear() ? 'text-[var(--text-muted)] opacity-30' : 'text-[var(--text-secondary)]'} />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-7 gap-0.5 text-center mb-1">
+                      {['T2','T3','T4','T5','T6','T7','CN'].map(d => <div key={d} className="text-[9px] text-[var(--text-muted)] py-0.5">{d}</div>)}
+                    </div>
+                    <div className="grid grid-cols-7 gap-0.5">
+                      {getDaysInMonth(datePickerMonth).map((d, i) => {
+                        if (!d) return <div key={i} />;
+                        const isPast = d <= now;
+                        const isToday = d.toDateString() === now.toDateString();
+                        return (
+                          <button key={i} disabled={!isPast}
+                            onClick={() => openDateInCalendar(d)}
+                            className={`aspect-square rounded-lg text-[11px] font-medium transition-all ${
+                              isToday ? 'bg-[var(--accent-primary)] text-white' :
+                              isPast ? 'hover:bg-[var(--accent-dim)] text-[var(--text-primary)]' :
+                              'text-[var(--text-muted)] opacity-30'
+                            }`}>
+                            {d.getDate()}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button onClick={() => setShowDatePicker(false)} className="w-full mt-2 text-[10px] text-[var(--text-muted)] py-1 hover:text-[var(--text-primary)]">Đóng</button>
+                  </div>
+                )}
+                  <div className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-tight ${todayStats.trueNet >= 0 ? 'bg-[var(--success)] text-white' : 'bg-[var(--error)] text-white'}`}>
+                    {todayStats.trueNet >= 0 ? 'CÓ LÃI' : 'ĐANG LỖ'}
+                  </div>
                 </div>
-                {renderDayFlow(date, incomeTxList, expenseTxList, ds.income, ds.expense, ds.dailyTimeCost, ds.trueNet, ds.trackedSeconds, true)}
-              </div>
-            );
-          }
 
-          // Today view
-          return (
-            <div className="bg-[var(--bg-elevated)] rounded-2xl p-4 border border-[var(--border-subtle)]">
-              <div className="flex items-center justify-between mb-4">
+                {/* ─── KẾT QUẢ TỔNG ─── */}
+                <div className="flex items-end justify-between mb-5">
+                  <div>
+                    <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-bold mb-1">Thực nhận hôm nay</p>
+                    <p className={`text-3xl font-black font-mono tabular-nums ${todayStats.trueNet >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
+                      {todayStats.trueNet > 0 ? '+' : ''}{Math.floor(Math.abs(todayStats.trueNet)).toLocaleString('vi-VN')}đ
+                    </p>
+                  </div>
+                  <div className="text-right text-[10px] text-[var(--text-muted)] space-y-0.5">
+                    <p>Theo dõi: <span className="font-mono text-[var(--text-primary)]">{formatDuration(todayStats.trackedSeconds)}</span></p>
+                    <p>Giá trị TG: <span className="font-mono text-[var(--success)]">+{Math.floor(todayStats.usedTimeCost).toLocaleString('vi-VN')}đ</span></p>
+                  </div>
+                </div>
+
+                {/* ─── THU ─── */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold text-[var(--success)] uppercase tracking-widest">▲ THU</span>
+                    <span className="text-sm font-bold font-mono text-[var(--success)]">+{Math.floor(todayStats.income).toLocaleString('vi-VN')}đ</span>
+                  </div>
+                  {todayStats.incomeTx.length === 0 ? (
+                    <p className="text-[10px] text-[var(--text-muted)] italic pl-2">Chưa có khoản thu nào hôm nay</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {todayStats.incomeTx.map((tx: any) => (
+                        <div key={tx.id} className="flex items-center justify-between pl-3 pr-2 py-1.5 rounded-lg bg-[rgba(52,211,153,0.06)] border border-[rgba(52,211,153,0.12)]">
+                          <span className="text-[11px] text-[var(--text-primary)] truncate">{tx.note}</span>
+                          <span className="text-[11px] font-mono font-bold text-[var(--success)] ml-2 flex-shrink-0">+{Math.floor(tx.amount).toLocaleString('vi-VN')}đ</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* ─── CHI ─── */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold text-[var(--error)] uppercase tracking-widest">▼ CHI</span>
+                    <span className="text-sm font-bold font-mono text-[var(--error)]">-{Math.floor(todayStats.expense + todayStats.dailyTimeCost).toLocaleString('vi-VN')}đ</span>
+                  </div>
+                  <div className="space-y-1">
+                    {/* Chi phí thời gian luôn hiển thị */}
+                    <div className="flex items-center justify-between pl-3 pr-2 py-1.5 rounded-lg bg-[rgba(248,113,113,0.06)] border border-[rgba(248,113,113,0.12)]">
+                      <span className="text-[11px] text-[var(--text-primary)]">⏱ Chi phí thời gian ({Math.round(todayStats.trackedSeconds/3600*10)/10}h / ngày)</span>
+                      <span className="text-[11px] font-mono font-bold text-[var(--error)] ml-2 flex-shrink-0">-{Math.floor(todayStats.dailyTimeCost).toLocaleString('vi-VN')}đ</span>
+                    </div>
+                    {todayStats.expenseTx.map((tx: any) => (
+                      <div key={tx.id} className="flex items-center justify-between pl-3 pr-2 py-1.5 rounded-lg bg-[rgba(248,113,113,0.06)] border border-[rgba(248,113,113,0.12)]">
+                        <span className="text-[11px] text-[var(--text-primary)] truncate">{tx.note}</span>
+                        <span className="text-[11px] font-mono font-bold text-[var(--error)] ml-2 flex-shrink-0">-{Math.floor(tx.amount).toLocaleString('vi-VN')}đ</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ─── ĐỀ XUẤT ─── */}
+                {(() => {
+                  const needed = todayStats.dailyTimeCost + todayStats.expense - todayStats.income;
+                  if (todayStats.trueNet >= 0) {
+                    return (
+                      <div className="px-3 py-2.5 rounded-xl bg-[rgba(52,211,153,0.08)] border border-[rgba(52,211,153,0.2)]">
+                        <p className="text-[11px] text-[var(--success)] font-medium">✅ Hôm nay đang có lãi! Duy trì và tiếp tục.</p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="px-3 py-2.5 rounded-xl bg-[rgba(251,191,36,0.08)] border border-[rgba(251,191,36,0.2)] space-y-1">
+                      <p className="text-[11px] font-bold text-[var(--warning)]">💡 Để hòa vốn hôm nay:</p>
+                      <p className="text-[10px] text-[var(--text-secondary)]">Cần thu thêm <span className="font-mono font-bold text-[var(--warning)]">+{Math.floor(needed).toLocaleString('vi-VN')}đ</span> nữa</p>
+                      <p className="text-[10px] text-[var(--text-muted)]">hoặc giảm chi phí, hoặc tăng năng suất làm việc.</p>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <SummaryCard label="Thu nhập" value={stats.income} icon={TrendingUp} color="var(--success)" />
+              <SummaryCard label="Chi tiêu" value={stats.expense} icon={TrendingDown} color="var(--error)" />
+              <SummaryCard label="Ròng (Tiền)" value={stats.net} icon={ArrowLeftRight} color={stats.net >= 0 ? 'var(--success)' : 'var(--error)'} />
+            </div>
+
+            <div className="bg-[var(--bg-elevated)] rounded-2xl p-4 border border-[var(--border-subtle)] relative overflow-hidden">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-xs font-bold text-[var(--text-secondary)] flex items-center gap-1.5">
+                  <Clock size={13} /> Hiệu quả Thời gian ({period === 'week' ? '7 ngày' : period === 'month' ? '30 ngày' : 'Tất cả'})
+                </h2>
+                <span className="text-[10px] font-mono text-[var(--text-muted)]">{formatDuration(stats.trackedSeconds)} tracked</span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
-                  <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide">Hôm nay</p>
-                  <p className="text-sm font-bold text-[var(--text-primary)]">
-                    {now.toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long' })}
+                  <p className="text-[10px] text-[var(--text-muted)]">Đã dùng (Used)</p>
+                  <p className="text-lg font-bold font-mono text-[var(--success)]">{formatMoneyPrecise(stats.usedTimeCost)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-[var(--text-muted)]">Lãng phí (Wasted)</p>
+                  <p className="text-lg font-bold font-mono text-[var(--error)]">{formatMoneyPrecise(stats.wastedTimeCost)}</p>
+                </div>
+              </div>
+
+              <div className="w-full h-2 bg-[var(--bg-surface)] rounded-full overflow-hidden flex">
+                <div className="h-full bg-[var(--success)] transition-all duration-500" style={{ width: `${(stats.usedTimeCost / stats.timeCost) * 100}%` }} />
+                <div className="h-full bg-[var(--error)] opacity-50 transition-all duration-500" style={{ width: `${(stats.wastedTimeCost / stats.timeCost) * 100}%` }} />
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] flex items-end justify-between">
+                <div>
+                  <p className="text-[10px] text-[var(--text-muted)]">Tổng Time Cost</p>
+                  <p className="text-base font-bold font-mono text-[var(--text-primary)]">{formatMoneyPrecise(stats.timeCost)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-[var(--text-muted)]">True Net Worth</p>
+                  <p className={`text-xl font-bold font-mono ${stats.trueNet >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
+                    {stats.trueNet >= 0 ? '+' : ''}{formatMoneyPrecise(stats.trueNet)}
                   </p>
                 </div>
-                <span className="text-[10px] text-[var(--text-muted)] font-mono">{formatDuration(todayStats.trackedSeconds)} theo dõi</span>
               </div>
-              {renderDayFlow(now, todayStats.incomeTx, todayStats.expenseTx, todayStats.income, todayStats.expense, todayStats.dailyTimeCost, todayStats.trueNet, todayStats.trackedSeconds)}
             </div>
-          );
-        })()}
 
-        {/* ── TREND CHART 14 ngày ── */}
-        <div className="bg-[var(--bg-elevated)] rounded-2xl p-4 border border-[var(--border-subtle)]">
-          <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide mb-3">Xu hướng 14 ngày</p>
-          <div className="h-36">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={dailyData}>
-                <defs>
-                  <linearGradient id="gNet" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} />
-                <YAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} width={30} tickFormatter={v => formatMoney(v)} />
-                <Tooltip
-                  contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: '10px', fontSize: '11px' }}
-                  formatter={(value: number) => [formatMoneyPrecise(value), '']}
-                />
-                <Area type="monotone" dataKey="net" stroke="var(--accent-primary)" fillOpacity={1} fill="url(#gNet)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+            <div className="bg-[var(--bg-elevated)] rounded-2xl p-4 border border-[var(--border-subtle)]">
+              <h2 className="text-xs font-bold text-[var(--text-secondary)] mb-3">Xu hướng Dòng tiền (14 ngày)</h2>
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={dailyData}>
+                    <defs>
+                      <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorUsed" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--success)" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="var(--success)" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                    <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} />
+                     <YAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} width={28} tickFormatter={v => formatMoney(v)} />
+                     <Tooltip 
+                        contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: '10px', fontSize: '11px' }}
+                        formatter={(value: number) => [formatMoneyPrecise(value), '']}
+                     />
+                     <Area type="monotone" dataKey="net" stroke="var(--accent-primary)" fillOpacity={1} fill="url(#colorNet)" />
+                     <Area type="monotone" dataKey="usedTimeCost" stroke="var(--success)" fillOpacity={1} fill="url(#colorUsed)" strokeDasharray="3 3" />
+                     <Line type="monotone" dataKey="timeCost" stroke="var(--text-muted)" strokeDasharray="5 5" dot={false} strokeWidth={1} />
+                   </AreaChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex justify-center gap-4 mt-2">
+                <div className="flex items-center gap-1.5">
+                  <div className="size-2 rounded-full bg-[var(--accent-primary)]" />
+                  <span className="text-[9px] text-[var(--text-muted)]">Ròng (Tiền)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="size-2 rounded-full bg-[var(--success)]" />
+                  <span className="text-[9px] text-[var(--text-muted)]">Thời gian hữu ích</span>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ── SELECTED DAY DETAIL (shown inline after picking from date picker) ── */}
+        {selectedDay && view === 'overview' && (() => {
+           const date = new Date(selectedDay);
+           const dayStats = getDayStats(date);
+           const isToday = date.toDateString() === now.toDateString();
+           return (
+             <div className="bg-[var(--bg-elevated)] rounded-2xl border border-[var(--border-subtle)] overflow-hidden animate-slide-up">
+               <div className="flex items-center justify-between px-4 py-3 bg-[var(--bg-surface)] border-b border-[var(--border-subtle)]">
+                 <div>
+                   <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                     {isToday ? 'Hôm nay' : date.toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long' })}
+                   </h3>
+                   <div className="flex items-center gap-2 mt-0.5">
+                     <span className="text-[10px] text-[var(--text-muted)]">Theo dõi: {formatDuration(dayStats.trackedSeconds || 0)}</span>
+                     {dayStats.dailyTimeCost > 0 && <>
+                       <span className="text-[10px] text-[var(--text-muted)]">•</span>
+                       <span className="text-[10px] text-[var(--error)]">Chi phí: -{formatMoneyPrecise(dayStats.dailyTimeCost)}</span>
+                     </>}
+                   </div>
+                 </div>
+                 <div className="flex items-center gap-2">
+                   <div className="text-right">
+                     <p className={`text-base font-bold font-mono ${dayStats.trueNet >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
+                       {dayStats.trueNet > 0 ? '+' : ''}{formatMoneyPrecise(dayStats.trueNet)}
+                     </p>
+                     <p className="text-[9px] text-[var(--text-muted)]">Thực nhận</p>
+                   </div>
+                   <button onClick={() => setSelectedDay(null)} className="size-7 rounded-lg bg-[var(--bg-elevated)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                     <X size={14} />
+                   </button>
+                 </div>
+               </div>
+               <div className="p-4">
+                 {dayStats.txs.length === 0 ? (
+                   <p className="text-xs text-[var(--text-muted)] text-center py-6">Không có dữ liệu giao dịch nào cho ngày này.</p>
+                 ) : (
+                   <div className="space-y-2">
+                     {dayStats.txs.map((tx: any, idx: number) => (
+                       <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-[var(--bg-surface)]">
+                         <div className="flex items-center gap-2.5">
+                           <span className="text-base">{CATEGORY_CONFIG[tx.category]?.icon || '📌'}</span>
+                           <p className="text-xs font-medium text-[var(--text-primary)]">{tx.note}</p>
+                         </div>
+                         <span className={`text-xs font-bold font-mono ${tx.type === 'income' ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
+                           {tx.type === 'income' ? '+' : '-'}{Math.floor(tx.amount).toLocaleString('vi-VN')}đ
+                         </span>
+                       </div>
+                     ))}
+                   </div>
+                 )}
+               </div>
+             </div>
+           );
+        })()}
       </div>
     </div>
   );

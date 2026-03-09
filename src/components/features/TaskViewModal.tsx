@@ -231,17 +231,31 @@ export function TaskViewModal({ task, onClose, onEdit }: TaskViewModalProps) {
                   </div>
                 </div>
               )}
-              {task.duration && task.duration > 0 && (
-                <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
-                  <div className="size-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[var(--accent-dim)] mt-0.5">
-                    <Clock size={14} className="text-[var(--accent-primary)]" />
+              {task.duration && task.duration > 0 && (() => {
+                const timeCost = Math.floor((task.duration * dailyTimeCost) / 86400);
+                const phiPhatSinh = Array.isArray(task.finance)
+                  ? task.finance.reduce((s, f) => f.type === 'expense' ? s + f.amount : s, 0)
+                  : 0;
+                const tongChiPhi = timeCost + phiPhatSinh;
+                return (
+                  <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
+                    <div className="size-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[var(--accent-dim)] mt-0.5">
+                      <Clock size={14} className="text-[var(--accent-primary)]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] text-[var(--text-muted)] mb-1">Thời lượng & Chi phí</p>
+                      <p className="text-xs font-mono font-semibold text-[var(--text-primary)] mb-0.5">{formatDuration(task.duration)}</p>
+                      <p className="text-[10px] text-[var(--error)]">Chi phí thời gian: -{timeCost.toLocaleString('vi-VN')}đ</p>
+                      {phiPhatSinh > 0 && (
+                        <p className="text-[10px] text-[var(--error)]">Chi phí phát sinh: -{Math.floor(phiPhatSinh).toLocaleString('vi-VN')}đ</p>
+                      )}
+                      <p className="text-[10px] font-bold text-[var(--error)] border-t border-[var(--border-subtle)] pt-0.5 mt-0.5">
+                        Tổng chi phí: -{Math.floor(tongChiPhi).toLocaleString('vi-VN')}đ
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] text-[var(--text-muted)]">Thời lượng</p>
-                    <p className="text-xs font-mono font-semibold text-[var(--text-primary)]">{formatDuration(task.duration)}</p>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
               {task.showRecurring && task.recurring?.type !== 'none' && (
                 <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] sm:col-span-2">
                   <div className="size-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[rgba(96,165,250,0.15)]">
@@ -312,7 +326,7 @@ export function TaskViewModal({ task, onClose, onEdit }: TaskViewModalProps) {
             <div className="rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] overflow-hidden">
               <div className="flex items-center justify-between px-3 py-2.5 border-b border-[var(--border-subtle)]">
                 <p className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wide flex items-center gap-1.5">
-                  <DollarSign size={11} /> Tài chính
+                  <DollarSign size={11} /> Tài chính (Thu/Chi)
                 </p>
                 <button onClick={() => setEditingFinance(!editingFinance)}
                   className="text-[10px] font-bold text-[var(--accent-primary)] hover:underline">
@@ -320,172 +334,88 @@ export function TaskViewModal({ task, onClose, onEdit }: TaskViewModalProps) {
                 </button>
               </div>
 
-              {/* Edit mode */}
-              {editingFinance ? (
-                <div className="px-3 py-2.5 space-y-3">
-                  {financeItems.map((item) => (
-                    <div key={item.id} className="bg-[var(--bg-elevated)] p-2 rounded-lg border border-[var(--border-subtle)] space-y-2">
-                      <div className="flex gap-2">
-                        <button onClick={() => updateFinanceItem(item.id, { type: item.type === 'income' ? 'expense' : 'income' })}
-                          className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-colors flex-shrink-0 ${item.type === 'income' ? 'bg-[rgba(52,211,153,0.15)] text-[var(--success)]' : 'bg-[rgba(248,113,113,0.15)] text-[var(--error)]'}`}>
-                          {item.type === 'income' ? '+ Thu' : '- Chi'}
-                        </button>
-                        <input type="number" value={item.amount || ''} onChange={e => updateFinanceItem(item.id, { amount: Math.max(0, parseInt(e.target.value) || 0) })}
-                          placeholder="Số tiền" inputMode="numeric"
-                          className="flex-1 bg-[var(--bg-surface)] rounded-lg px-2 py-1 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] font-mono min-h-[30px]" />
-                        <button onClick={() => removeFinanceItem(item.id)} className="size-7 rounded-lg bg-[var(--bg-surface)] flex items-center justify-center text-[var(--error)]">
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                      {/* Category picker from settings */}
-                      <div className="flex flex-wrap gap-1">
-                        {financeCategories
-                          .filter(c => c.type === item.type || c.type === 'both')
-                          .map((c: FinanceCategory) => (
-                            <button key={c.id} onClick={() => updateFinanceItem(item.id, { note: c.name })}
-                              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] transition-colors ${(item.note && item.note.startsWith(c.name)) ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-surface)] text-[var(--text-muted)]'}`}>
-                              <span>{c.icon}</span>{c.name}
-                            </button>
-                          ))}
-                      </div>
-                      <input type="text" value={item.note || ''} onChange={e => updateFinanceItem(item.id, { note: e.target.value })}
-                        placeholder="Ghi chú thêm (tuỳ chọn)..."
-                        className="w-full bg-[var(--bg-surface)] rounded-lg px-2 py-1 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[30px]" />
-                    </div>
-                  ))}
-                  <button onClick={addFinanceItem}
-                    className="w-full py-2 rounded-lg border border-dashed border-[var(--border-subtle)] text-[10px] text-[var(--text-muted)] flex items-center justify-center gap-1 hover:bg-[var(--bg-elevated)]">
-                    <Plus size={12} /> Thêm khoản mới
-                  </button>
-                  <button onClick={saveFinance}
-                    className="w-full py-2.5 rounded-lg text-xs font-bold text-[var(--bg-base)] bg-[var(--accent-primary)] min-h-[36px]">
-                    Lưu thay đổi
-                  </button>
-                </div>
-              ) : (
-                <div className="px-3 py-2.5 space-y-3">
-                  {/* Danh sách Thu */}
-                  <div>
-                    <p className="text-[10px] font-semibold text-[var(--success)] uppercase tracking-wide mb-1.5 flex items-center gap-1">
-                      📥 Danh sách Thu
-                    </p>
-                    {task.finance && Array.isArray(task.finance) && task.finance.filter(f => f.type === 'income').length > 0 ? (
-                      <div className="space-y-1 bg-[var(--bg-elevated)] rounded-lg p-2">
-                        {task.finance.filter(f => f.type === 'income').map(f => (
-                          <div key={f.id} className="flex items-center justify-between py-0.5">
-                            <div className="flex items-center gap-2 overflow-hidden">
-                              <div className="size-1.5 rounded-full flex-shrink-0 bg-[var(--success)]" />
-                              <p className="text-xs text-[var(--text-primary)] truncate">{f.note || 'Thu nhập'}</p>
-                            </div>
-                            <p className="text-xs font-bold font-mono flex-shrink-0 ml-2 text-[var(--success)]">
-                              +{Math.floor(f.amount).toLocaleString('vi-VN')}đ
-                            </p>
-                          </div>
-                        ))}
-                        <div className="flex items-center justify-between pt-1.5 mt-1 border-t border-[var(--border-subtle)]">
-                          <p className="text-[10px] font-semibold text-[var(--text-muted)]">Tổng Thu</p>
-                          <p className="text-xs font-bold font-mono text-[var(--success)]">
-                            +{Math.floor(profitLossAnalysis.totalIncome).toLocaleString('vi-VN')}đ
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-[10px] text-[var(--text-muted)] italic pl-2">Chưa có thu nhập</p>
-                    )}
+              {/* Finance summary bar */}
+              {!editingFinance && financeTotal && (
+                <div className="grid grid-cols-3 divide-x divide-[var(--border-subtle)] border-b border-[var(--border-subtle)]">
+                  <div className="px-3 py-2 text-center">
+                    <p className="text-[9px] text-[var(--text-muted)] mb-0.5">Thu</p>
+                    <p className="text-xs font-bold text-[var(--success)] font-mono">+{Math.floor(financeTotal.income).toLocaleString('vi-VN')}đ</p>
                   </div>
-
-                  {/* Danh sách Chi - Phân tách Chi phí Phát sinh và Chi phí Thời gian */}
-                  <div>
-                    <p className="text-[10px] font-semibold text-[var(--error)] uppercase tracking-wide mb-1.5 flex items-center gap-1">
-                      📤 Danh sách Chi
-                    </p>
-                    
-                    {/* Chi phí Phát sinh */}
-                    {task.finance && Array.isArray(task.finance) && task.finance.filter(f => f.type === 'expense').length > 0 ? (
-                      <div className="space-y-1 bg-[var(--bg-elevated)] rounded-lg p-2 mb-2">
-                        <p className="text-[9px] font-semibold text-[var(--warning)] uppercase tracking-wide mb-1">Chi phí Phát sinh</p>
-                        {task.finance.filter(f => f.type === 'expense').map(f => (
-                          <div key={f.id} className="flex items-center justify-between py-0.5">
-                            <div className="flex items-center gap-2 overflow-hidden">
-                              <div className="size-1.5 rounded-full flex-shrink-0 bg-[var(--error)]" />
-                              <p className="text-xs text-[var(--text-primary)] truncate">{f.note || 'Chi phí'}</p>
-                            </div>
-                            <p className="text-xs font-bold font-mono flex-shrink-0 ml-2 text-[var(--error)]">
-                              -{Math.floor(f.amount).toLocaleString('vi-VN')}đ
-                            </p>
-                          </div>
-                        ))}
-                        <div className="flex items-center justify-between pt-1 mt-1 border-t border-[var(--border-subtle)]">
-                          <p className="text-[10px] font-semibold text-[var(--text-muted)]">Tổng Chi phí Phát sinh</p>
-                          <p className="text-xs font-bold font-mono text-[var(--error)]">
-                            -{Math.floor(profitLossAnalysis.emergentCost).toLocaleString('vi-VN')}đ
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-[10px] text-[var(--text-muted)] italic pl-2 mb-2">Chưa có chi phí phát sinh</p>
-                    )}
-                    
-                    {/* Chi phí Thời gian */}
-                    {task.duration && task.duration > 0 && (
-                      <div className="space-y-1 bg-[var(--bg-elevated)] rounded-lg p-2">
-                        <p className="text-[9px] font-semibold text-[var(--info)] uppercase tracking-wide mb-1 flex items-center gap-1">
-                          ⏱️ Chi phí Thời gian
-                        </p>
-                        <div className="flex items-center justify-between py-0.5">
-                          <div className="flex items-center gap-2 overflow-hidden">
-                            <div className="size-1.5 rounded-full flex-shrink-0 bg-[var(--info)]" />
-                            <p className="text-xs text-[var(--text-primary)] truncate">
-                              {formatDuration(task.duration)} × {dailyTimeCost.toLocaleString('vi-VN')}đ/ngày
-                            </p>
-                          </div>
-                          <p className="text-xs font-bold font-mono flex-shrink-0 ml-2 text-[var(--error)]">
-                            -{Math.floor(profitLossAnalysis.timeCost).toLocaleString('vi-VN')}đ
-                          </p>
-                        </div>
-                        <div className="flex items-center justify-between pt-1 mt-1 border-t border-[var(--border-subtle)]">
-                          <p className="text-[10px] font-semibold text-[var(--text-muted)]">Tổng Chi phí Thời gian</p>
-                          <p className="text-xs font-bold font-mono text-[var(--error)]">
-                            -{Math.floor(profitLossAnalysis.timeCost).toLocaleString('vi-VN')}đ
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Tổng cộng Chi */}
-                    <div className="flex items-center justify-between pt-2 mt-2 border-t border-[var(--border-subtle)]">
-                      <p className="text-[10px] font-bold text-[var(--text-muted)]">Tổng Chi</p>
-                      <p className="text-xs font-bold font-mono text-[var(--error)]">
-                        -{Math.floor(profitLossAnalysis.totalExpense).toLocaleString('vi-VN')}đ
-                      </p>
-                    </div>
+                  <div className="px-3 py-2 text-center">
+                    <p className="text-[9px] text-[var(--text-muted)] mb-0.5">Chi</p>
+                    <p className="text-xs font-bold text-[var(--error)] font-mono">-{Math.floor(financeTotal.expense).toLocaleString('vi-VN')}đ</p>
                   </div>
-
-                  {/* Lời/Lỗ Analysis */}
-                  <div className={`rounded-lg p-3 border ${profitLossAnalysis.netProfit >= 0 ? 'bg-[rgba(52,211,153,0.08)] border-[var(--success)]/30' : 'bg-[rgba(248,113,113,0.08)] border-[var(--error)]/30'}`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]">
-                        {profitLossAnalysis.netProfit > 0 ? '✅ LỜI' : profitLossAnalysis.netProfit < 0 ? '❌ LỖ' : '⚖️ HÒA VỐN'}
-                      </p>
-                      <p className={`text-sm font-bold font-mono ${profitLossAnalysis.netProfit >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
-                        {profitLossAnalysis.netProfit >= 0 ? '+' : ''}{Math.floor(profitLossAnalysis.netProfit).toLocaleString('vi-VN')}đ
-                      </p>
-                    </div>
-                    
-                    {/* Lý do */}
-                    <div className="mb-2">
-                      <p className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-0.5">Lý do:</p>
-                      <p className="text-[10px] text-[var(--text-primary)]">{profitLossAnalysis.reason}</p>
-                    </div>
-                    
-                    {/* Đề xuất cải thiện */}
-                    <div className="pt-2 border-t border-[var(--border-subtle)]">
-                      <p className="text-[9px] font-semibold text-[var(--accent-primary)] uppercase tracking-wide mb-0.5">Đề xuất cải thiện:</p>
-                      <p className="text-[10px] text-[var(--text-secondary)]">{profitLossAnalysis.suggestion}</p>
-                    </div>
+                  <div className="px-3 py-2 text-center">
+                    <p className="text-[9px] text-[var(--text-muted)] mb-0.5">Ròng</p>
+                    <p className={`text-xs font-bold font-mono ${financeTotal.net >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
+                      {financeTotal.net >= 0 ? '+' : ''}{Math.floor(financeTotal.net).toLocaleString('vi-VN')}đ
+                    </p>
                   </div>
                 </div>
               )}
+
+              <div className="px-3 py-2.5">
+                {!editingFinance ? (
+                  <div className="space-y-1.5">
+                    {task.finance && Array.isArray(task.finance) && task.finance.length > 0 ? (
+                      task.finance.map(f => (
+                        <div key={f.id} className="flex items-center justify-between py-0.5">
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            <div className={`size-1.5 rounded-full flex-shrink-0 ${f.type === 'income' ? 'bg-[var(--success)]' : 'bg-[var(--error)]'}`} />
+                            <p className="text-xs text-[var(--text-primary)] truncate">{f.note || (f.type === 'income' ? 'Thu nhập' : 'Chi phí')}</p>
+                          </div>
+                          <p className={`text-xs font-bold font-mono flex-shrink-0 ml-2 ${f.type === 'income' ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
+                            {f.type === 'income' ? '+' : '-'}{Math.floor(f.amount).toLocaleString('vi-VN')}đ
+                          </p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-[10px] text-[var(--text-muted)] italic">Chưa có giao dịch nào</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {financeItems.map((item) => (
+                      <div key={item.id} className="bg-[var(--bg-elevated)] p-2 rounded-lg border border-[var(--border-subtle)] space-y-2">
+                        <div className="flex gap-2">
+                          <button onClick={() => updateFinanceItem(item.id, { type: item.type === 'income' ? 'expense' : 'income' })}
+                            className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-colors flex-shrink-0 ${item.type === 'income' ? 'bg-[rgba(52,211,153,0.15)] text-[var(--success)]' : 'bg-[rgba(248,113,113,0.15)] text-[var(--error)]'}`}>
+                            {item.type === 'income' ? '+ Thu' : '- Chi'}
+                          </button>
+                          <input type="number" value={item.amount || ''} onChange={e => updateFinanceItem(item.id, { amount: Math.max(0, parseInt(e.target.value) || 0) })}
+                            placeholder="Số tiền" inputMode="numeric"
+                            className="flex-1 bg-[var(--bg-surface)] rounded-lg px-2 py-1 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] font-mono min-h-[30px]" />
+                          <button onClick={() => removeFinanceItem(item.id)} className="size-7 rounded-lg bg-[var(--bg-surface)] flex items-center justify-center text-[var(--error)]">
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                        {/* Category picker from settings */}
+                        <div className="flex flex-wrap gap-1">
+                          {financeCategories
+                            .filter(c => c.type === item.type || c.type === 'both')
+                            .map((c: FinanceCategory) => (
+                              <button key={c.id} onClick={() => updateFinanceItem(item.id, { note: c.name })}
+                                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] transition-colors ${(item.note && item.note.startsWith(c.name)) ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-surface)] text-[var(--text-muted)]'}`}>
+                                <span>{c.icon}</span>{c.name}
+                              </button>
+                            ))}
+                        </div>
+                        <input type="text" value={item.note || ''} onChange={e => updateFinanceItem(item.id, { note: e.target.value })}
+                          placeholder="Ghi chú thêm (tuỳ chọn)..."
+                          className="w-full bg-[var(--bg-surface)] rounded-lg px-2 py-1 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[30px]" />
+                      </div>
+                    ))}
+                    <button onClick={addFinanceItem}
+                      className="w-full py-2 rounded-lg border border-dashed border-[var(--border-subtle)] text-[10px] text-[var(--text-muted)] flex items-center justify-center gap-1 hover:bg-[var(--bg-elevated)]">
+                      <Plus size={12} /> Thêm khoản mới
+                    </button>
+                    <button onClick={saveFinance}
+                      className="w-full py-2.5 rounded-lg text-xs font-bold text-[var(--bg-base)] bg-[var(--accent-primary)] min-h-[36px]">
+                      Lưu thay đổi
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

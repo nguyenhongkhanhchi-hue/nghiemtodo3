@@ -417,15 +417,15 @@ function TemplateEditor({ template, isGroupMode, onSave, onCancel }: {
                 onToggle={() => {
                   const next = !showFinance;
                   setShowFinance(next);
-                  if (next && !finance) setFinance({ type: 'expense', amount: 0 });
+                  if (next && !finance) setFinance({ type: 'expense', amount: 0, category: 'other' });
                 }}
               >
                 <div className="flex gap-2 pt-2">
                   <select
-                    value={(finance ?? { type: 'expense', amount: 0 }).type}
+                    value={(finance ?? { type: 'expense', amount: 0, category: 'other' }).type}
                     onChange={e =>
                       setFinance({
-                        ...(finance ?? { type: 'expense', amount: 0 }),
+                        ...(finance ?? { type: 'expense', amount: 0, category: 'other' }),
                         type: e.target.value as any,
                       })
                     }
@@ -436,10 +436,10 @@ function TemplateEditor({ template, isGroupMode, onSave, onCancel }: {
                     </select>
                     <input
                       type="number"
-                      value={(finance ?? { type: 'expense', amount: 0 }).amount || ''}
+                      value={(finance ?? { type: 'expense', amount: 0, category: 'other' }).amount || ''}
                       onChange={e =>
                         setFinance({
-                          ...(finance ?? { type: 'expense', amount: 0 }),
+                          ...(finance ?? { type: 'expense', amount: 0, category: 'other' }),
                           amount: Math.max(0, parseInt(e.target.value) || 0),
                         })
                       }
