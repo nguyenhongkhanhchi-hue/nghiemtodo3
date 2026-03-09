@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useSettingsStore } from '@/stores';
 import { useIsMobile } from '@/hooks/use-mobile';
 
-const INACTIVITY_DELAY = 5000; // 5 seconds
+const INACTIVITY_DELAY = 15000; // 15 seconds
 const REDUCED_BRIGHTNESS = 5;  // 5% brightness when dimmed
 const NORMAL_BRIGHTNESS = 100;
 const SWIPE_THRESHOLD = 80;    // Minimum swipe distance in pixels

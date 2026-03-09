@@ -50,7 +50,7 @@ export default function App() {
   const [triggeredReminder, setTriggeredReminder] = useState<Reminder | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Auto screen control (dim + lock after 5s inactivity)
+  // Auto screen control (dim + lock after 15s inactivity)
   const { handleSwipeUnlock } = useAutoScreenControl();
 
   // Font scale
