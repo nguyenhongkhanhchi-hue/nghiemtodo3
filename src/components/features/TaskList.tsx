@@ -1,14 +1,13 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
-import { useTaskStore, useAuthStore } from '@/stores';
+import { useState, useMemo } from 'react';
+import { useTaskStore, useSettingsStore } from '@/stores';
 import { TaskViewModal } from '@/components/features/TaskViewModal';
 import { TaskEditModal } from '@/components/features/TaskEditModal';
 import { useDragAndDrop } from '@/hooks/useDragAndDrop';
 import { QUADRANT_LABELS, CATEGORY_LABELS } from '@/types';
-import type { Task, EisenhowerQuadrant, TaskStatus, TaskCategory } from '@/types';
+import type { Task, EisenhowerQuadrant } from '@/types';
 import { isTaskOverdue } from '@/lib/autoQuadrant';
-import { toast } from '@/lib/toast';
 import { playTabSound } from '@/lib/soundEffects';
-import { Play, Pause, Check, Trash2, RotateCcw, Search, X, ArrowUpDown } from 'lucide-react';
+import { Play, Pause, Check, Trash2, RotateCcw, Search, X, ArrowUpDown, DollarSign } from 'lucide-react';
 
 // Tab types
 type ActiveTab = EisenhowerQuadrant | 'overdue';
@@ -20,6 +19,7 @@ type EliminateTab = 'all';
 export function TaskList() {
   const tasks = useTaskStore(s => s.tasks);
   const timer = useTaskStore(s => s.timer);
+  const { dailyTimeCost } = useSettingsStore();
   const startTimer = useTaskStore(s => s.startTimer);
   const pauseTimer = useTaskStore(s => s.pauseTimer);
   const resumeTimer = useTaskStore(s => s.resumeTimer);
@@ -27,7 +27,6 @@ export function TaskList() {
   const removeTask = useTaskStore(s => s.removeTask);
   const restoreTask = useTaskStore(s => s.restoreTask);
   const reorderTasks = useTaskStore(s => s.reorderTasks);
-  const user = useAuthStore(s => s.user);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('do_first');
   const [doFirstTab, setDoFirstTab] = useState<DoFirstTab>('pending');
@@ -40,7 +39,6 @@ export function TaskList() {
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [viewTask, setViewTask] = useState<Task | null>(null);
   const [editTask, setEditTask] = useState<Task | null>(null);
-  const [quadrantChangeTask, setQuadrantChangeTask] = useState<Task | null>(null);
   const [lastClickTime, setLastClickTime] = useState<{ [key: string]: number }>({});
   const DOUBLE_CLICK_DELAY = 300;
 
@@ -147,7 +145,7 @@ export function TaskList() {
     return result;
   }, [tabTasks, activeTab, doFirstTab, scheduleTab, delegateTab, eliminateTab, searchQuery, sortBy, sortOrder]);
 
-  const { draggedIndex, handleDragStart, handleDragOver, handleDrop } = useDragAndDrop(filteredTasks, reorderTasks);
+  const { draggedIndex, onDragStart, onDragOver, onDragEnd } = useDragAndDrop(reorderTasks);
 
   const handleTaskAction = (task: Task, action: 'view' | 'edit' | 'start' | 'pause' | 'resume' | 'complete' | 'delete' | 'restore') => {
     switch (action) {
@@ -179,8 +177,8 @@ export function TaskList() {
     const lastClick = lastClickTime[task.id] || 0;
     if (now - lastClick < DOUBLE_CLICK_DELAY) {
       // Double click detected
-      setQuadrantChangeTask(task);
       setLastClickTime({ ...lastClickTime, [task.id]: 0 });
+      setEditTask(task);
     } else {
       // Single click - view task
       setLastClickTime({ ...lastClickTime, [task.id]: now });
@@ -287,7 +285,6 @@ export function TaskList() {
 
                 let count = 0;
                 switch (tab.key) {
-                  case 'overdue': count = tabTasks.filter(t => isTaskOverdue(t)).length; break;
                   case 'tomorrow': count = tabTasks.filter(t => t.deadline && t.deadline <= tomorrow).length; break;
                   case '3days': count = tabTasks.filter(t => t.deadline && t.deadline > tomorrow && t.deadline <= threeDays).length; break;
                   case 'week': count = tabTasks.filter(t => t.deadline && t.deadline > threeDays && t.deadline <= week).length; break;
@@ -405,14 +402,13 @@ export function TaskList() {
             const canTimer = canStartTimer(task);
             const isDone = task.status === 'done';
             const taskIsOverdue = isTaskOverdue(task);
-            const cfg = QUADRANT_LABELS[task.quadrant];
 
             return (
               <div key={task.id}
                 draggable={task.status === 'pending'}
-                onDragStart={() => handleDragStart(index)}
-                onDragOver={e => handleDragOver(e, index)}
-                onDrop={handleDrop}
+                onDragStart={(e) => onDragStart(index, e)}
+                onDragOver={() => onDragOver(index)}
+                onDragEnd={onDragEnd}
                 className={`bg-[var(--bg-elevated)] rounded-xl border p-3 transition-all ${draggedIndex === index ? 'opacity-50 scale-95' : ''} ${isActive ? 'border-[var(--accent-primary)] shadow-lg' : 'border-[var(--border-subtle)]'}`}>
                 <div className="flex items-start gap-2">
                   {/* Status checkbox */}
@@ -450,13 +446,15 @@ export function TaskList() {
                         </>
                       )}
                       {task.duration && task.duration > 0 && (
-                        <span className="text-[9px] text-[var(--text-muted)]">
-                          ⏱️ {Math.floor(task.duration / 60)}:{String(task.duration % 60).padStart(2, '0')}
+                        <span className="text-[9px] text-[var(--text-muted)] flex items-center gap-1">
+                          <span>⏱️ {Math.floor(task.duration / 60)}:{String(task.duration % 60).padStart(2, '0')}</span>
+                          <span className="text-[var(--error)] opacity-80">(-{Math.floor((task.duration * dailyTimeCost) / 86400)}đ)</span>
                         </span>
                       )}
-                      {task.finance && (
-                        <span className={`text-[9px] font-mono ${task.finance.type === 'income' ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
-                          {task.finance.type === 'income' ? '+' : '-'}{task.finance.amount.toLocaleString('vi-VN')}đ
+                      {task.finance && Array.isArray(task.finance) && task.finance.length > 0 && (
+                        <span className={`text-[9px] font-mono ${task.finance[0].type === 'income' ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
+                          {task.finance[0].type === 'income' ? '+' : '-'}{Math.floor(task.finance[0].amount)}đ
+                          {task.finance.length > 1 && ` (+${task.finance.length - 1})`}
                         </span>
                       )}
                       {task.category && (
@@ -473,6 +471,10 @@ export function TaskList() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-1 flex-shrink-0">
+                    <button onClick={() => setViewTask(task)}
+                      className="size-7 rounded-lg bg-[var(--bg-surface)] flex items-center justify-center text-[var(--accent-primary)] hover:bg-[var(--accent-dim)]">
+                      <DollarSign size={12} />
+                    </button>
                     {canTimer && !isDone && (
                       <>
                         {isActive && timer.isPaused ? (

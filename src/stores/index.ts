@@ -136,7 +136,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       order: tasks.filter(t => t.status === 'pending').length,
       recurring: recurring || { type: 'none' },
       recurringLabel: recurring && recurring.type !== 'none' ? title : undefined,
-      finance, templateId, isGroup,
+      finance: finance ? [finance] : undefined, templateId, isGroup,
       groupTemplateIds: opts?.groupTemplateIds,
       showDeadline: opts?.showDeadline ?? !!deadline,
       showRecurring: opts?.showRecurring ?? (recurring?.type !== 'none'),
@@ -299,6 +299,25 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     const userId = get()._userId;
     if (t.taskId) {
       const elapsed = t.elapsed;
+      const task = get().tasks.find(tk => tk.id === t.taskId);
+      
+      // Create Time Log entry
+      if (task && elapsed > 0) {
+        const tz = useSettingsStore.getState().timezone;
+        const now = getNowInTimezone(tz);
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        
+        useTimeLogStore.getState().addTimeLog({
+          type: 'activity',
+          title: task.title,
+          startTime: t.startTime || (Date.now() - elapsed * 1000),
+          endTime: Date.now(),
+          duration: elapsed,
+          date: todayStr,
+          taskId: task.id
+        });
+      }
+
       const updated = get().tasks.map(tk => {
         if (tk.id === t.taskId) {
           const newDuration = (tk.duration || 0) + elapsed;
@@ -480,8 +499,9 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
       if (!single) return;
       const fin = single.finance;
       const rec = recurringOverride || single.recurring;
+      const manualQuadrant = quadrant === 'delegate' || quadrant === 'eliminate' ? quadrant : undefined;
       taskStore.addTask(
-        single.title, quadrant, deadline, rec, deadlineDate, deadlineTime, fin, single.id, false,
+        single.title, manualQuadrant, deadline, rec, deadlineDate, deadlineTime, fin, single.id, false,
         { notes: notesOverride || single.notes, showDeadline: !!deadline, showRecurring: rec?.type !== 'none', showFinance: !!fin, showNotes: !!(notesOverride || single.notes), groupTemplateIds: [groupTemplateId] },
       );
     });
@@ -492,8 +512,9 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
     const taskStore = useTaskStore.getState();
     const rec = recurring || template.recurring;
     const fin = finance || template.finance;
+    const manualQuadrant = quadrant === 'delegate' || quadrant === 'eliminate' ? quadrant : undefined;
     taskStore.addTask(
-      template.title, quadrant, deadline, rec, deadlineDate, deadlineTime, fin, templateId, false,
+      template.title, manualQuadrant, deadline, rec, deadlineDate, deadlineTime, fin, templateId, false,
       { notes: notes || template.notes, showDeadline: !!deadline, showRecurring: rec?.type !== 'none', showFinance: !!fin, showNotes: !!(notes || template.notes) },
     );
   },
@@ -756,6 +777,25 @@ export const useTimeLogStore = create<TimeLogStore>((set, get) => ({
 }));
 
 // ──────────── SETTINGS STORE ────────────
+export interface FinanceCategory {
+  id: string;
+  name: string;
+  icon: string;
+  type: 'income' | 'expense' | 'both';
+}
+
+const DEFAULT_FINANCE_CATEGORIES: FinanceCategory[] = [
+  { id: 'salary', name: 'Lương / Thu nhập', icon: '💼', type: 'income' },
+  { id: 'freelance', name: 'Freelance', icon: '💻', type: 'income' },
+  { id: 'other_income', name: 'Thu nhập khác', icon: '💰', type: 'income' },
+  { id: 'food', name: 'Ăn uống', icon: '🍔', type: 'expense' },
+  { id: 'transport', name: 'Di chuyển', icon: '🚗', type: 'expense' },
+  { id: 'utilities', name: 'Điện / Nước / Mạng', icon: '💡', type: 'expense' },
+  { id: 'shopping', name: 'Mua sắm', icon: '🛒', type: 'expense' },
+  { id: 'rent', name: 'Nhà / Thuê mặt bằng', icon: '🏠', type: 'expense' },
+  { id: 'other_expense', name: 'Chi phí khác', icon: '📦', type: 'expense' },
+];
+
 interface AdditionalCost {
   id: string;
   type: 'money' | 'energy' | 'mental';
@@ -795,8 +835,12 @@ interface SettingsStore {
   setDailyTimeCost: (cost: number) => void;
   setSleepHours: (hours: number) => void;
   setWorkingHours: (hours: number) => void;
+  financeCategories: FinanceCategory[];
   addAdditionalCost: (cost: AdditionalCost) => void;
   removeAdditionalCost: (id: string) => void;
+  setFinanceCategories: (cats: FinanceCategory[]) => void;
+  addFinanceCategory: (cat: Omit<FinanceCategory, 'id'>) => void;
+  removeFinanceCategory: (id: string) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>((set) => ({
@@ -814,6 +858,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   sleepHours: loadFromStorage<number>('nw_sleep_hours', 7),
   workingHours: loadFromStorage<number>('nw_working_hours', 8),
   additionalCosts: loadFromStorage<AdditionalCost[]>('nw_additional_costs', []),
+  financeCategories: loadFromStorage<FinanceCategory[]>('nw_finance_categories', DEFAULT_FINANCE_CATEGORIES),
   setFontScale: (scale) => {
     const safe = Math.max(0.75, Math.min(1.5, scale));
     saveToStorage('nw_fontscale', safe);
@@ -874,6 +919,22 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       const updated = [...prev.additionalCosts, newCost];
       saveToStorage('nw_additional_costs', updated);
       return { additionalCosts: updated };
+    });
+  },
+  setFinanceCategories: (cats) => { saveToStorage('nw_finance_categories', cats); set({ financeCategories: cats }); },
+  addFinanceCategory: (cat) => {
+    const newCat: FinanceCategory = { ...cat, id: generateId() };
+    set((prev) => {
+      const updated = [...prev.financeCategories, newCat];
+      saveToStorage('nw_finance_categories', updated);
+      return { financeCategories: updated };
+    });
+  },
+  removeFinanceCategory: (id) => {
+    set((prev) => {
+      const updated = prev.financeCategories.filter(c => c.id !== id);
+      saveToStorage('nw_finance_categories', updated);
+      return { financeCategories: updated };
     });
   },
   removeAdditionalCost: (id) => {

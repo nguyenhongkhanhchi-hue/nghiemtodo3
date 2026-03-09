@@ -1,12 +1,13 @@
 import { useRef, useState, useEffect } from 'react';
 import { useTaskStore, useAuthStore, useSettingsStore, useGamificationStore, useTemplateStore } from '@/stores';
+import type { FinanceCategory } from '@/stores';
 import { supabase } from '@/lib/supabase';
 import { requestNotificationPermission, canSendNotification } from '@/lib/notifications';
 import { exportData, importData } from '@/lib/dataUtils';
 import { DEFAULT_VOICE_SETTINGS } from '@/types';
 import {
   Type, Volume2, Mic, Trash2, Minus, Plus, ChevronDown,
-  LogOut, User, Globe, Bell, Download, Upload, Smartphone, Sun, Moon, Shield,
+  LogOut, User, Globe, Bell, Download, Upload, Smartphone, Sun, Moon, Shield, DollarSign, X,
 } from 'lucide-react';
 import AdminPage from '@/pages/AdminPage';
 
@@ -75,10 +76,24 @@ export default function SettingsPage() {
   const setNotificationSettings = useSettingsStore(s => s.setNotificationSettings);
   const setVoiceSettings = useSettingsStore(s => s.setVoiceSettings);
   const setTheme = useSettingsStore(s => s.setTheme);
+  const dailyTimeCost = useSettingsStore(s => s.dailyTimeCost);
+  const setDailyTimeCost = useSettingsStore(s => s.setDailyTimeCost);
+  const financeCategories = useSettingsStore(s => s.financeCategories);
+  const addFinanceCategory = useSettingsStore(s => s.addFinanceCategory);
+  const removeFinanceCategory = useSettingsStore(s => s.removeFinanceCategory);
   const user = useAuthStore(s => s.user);
   const logout = useAuthStore(s => s.logout);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [newCat, setNewCat] = useState({ name: '', icon: '💡', type: 'expense' as FinanceCategory['type'] });
+
+  const costPerSecond = dailyTimeCost / (24 * 3600);
+  const costPerMinute = costPerSecond * 60;
+  const costPerHour = costPerSecond * 3600;
+
+  function formatMoney(amount: number) {
+    return amount.toLocaleString('vi-VN') + 'đ';
+  }
 
   const os = getOS();
   const installed = isStandalone();
@@ -234,6 +249,76 @@ export default function SettingsPage() {
           className="w-full bg-[var(--bg-surface)] rounded-xl px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[40px]">
           {TIMEZONES.map(tz => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
         </select>
+      </Section>
+
+      <Section title="Chi phí thời gian" icon={<DollarSign size={16} className="text-[var(--warning)]" />}>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-[var(--text-muted)] mb-1 block">Chi phí/ngày (cho 24h)</label>
+            <input
+              type="number"
+              value={dailyTimeCost}
+              onChange={(e) => setDailyTimeCost(Number(e.target.value))}
+              className="w-full bg-[var(--bg-surface)] rounded-xl px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] font-mono min-h-[40px]"
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center bg-[var(--bg-surface)] rounded-xl p-3 border border-[var(--border-subtle)]">
+            <div>
+              <p className="text-[10px] text-[var(--text-muted)]">Mỗi giờ</p>
+              <p className="text-xs font-bold font-mono text-[var(--accent-primary)]">{formatMoney(costPerHour)}</p>
+            </div>
+            <div className="border-l border-[var(--border-subtle)]">
+              <p className="text-[10px] text-[var(--text-muted)]">Mỗi phút</p>
+              <p className="text-xs font-bold font-mono text-[var(--warning)]">{formatMoney(costPerMinute)}</p>
+            </div>
+            <div className="border-l border-[var(--border-subtle)]">
+              <p className="text-[10px] text-[var(--text-muted)]">Mỗi giây</p>
+              <p className="text-xs font-bold font-mono text-[var(--error)]">{formatMoney(costPerSecond)}</p>
+            </div>
+          </div>
+        </div>
+      </Section>
+
+      <Section title="Hạng mục Thu/Chi" icon={<DollarSign size={16} className="text-[var(--success)]" />}>
+        <div className="space-y-2">
+          {financeCategories.map(cat => (
+            <div key={cat.id} className="flex items-center justify-between px-3 py-2 rounded-xl bg-[var(--bg-surface)]">
+              <div className="flex items-center gap-2">
+                <span className="text-base">{cat.icon}</span>
+                <div>
+                  <p className="text-xs font-medium text-[var(--text-primary)]">{cat.name}</p>
+                  <p className="text-[10px] text-[var(--text-muted)]">{cat.type === 'income' ? 'Thu' : cat.type === 'expense' ? 'Chi' : 'Cả hai'}</p>
+                </div>
+              </div>
+              <button onClick={() => removeFinanceCategory(cat.id)} className="size-7 rounded-lg flex items-center justify-center text-[var(--error)] hover:bg-[rgba(248,113,113,0.1)]">
+                <X size={13} />
+              </button>
+            </div>
+          ))}
+          <div className="pt-1 space-y-2 border-t border-[var(--border-subtle)]">
+            <p className="text-[10px] text-[var(--text-muted)] font-medium">Thêm hạng mục mới</p>
+            <div className="flex gap-2">
+              <input value={newCat.icon} onChange={e => setNewCat(p => ({ ...p, icon: e.target.value }))}
+                className="w-12 bg-[var(--bg-surface)] rounded-xl px-2 py-2 text-center text-base outline-none border border-[var(--border-subtle)] min-h-[36px]"
+                placeholder="🏷️" maxLength={2} />
+              <input value={newCat.name} onChange={e => setNewCat(p => ({ ...p, name: e.target.value }))}
+                className="flex-1 bg-[var(--bg-surface)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[36px]"
+                placeholder="Tên hạng mục..." />
+            </div>
+            <div className="flex gap-1.5">
+              {(['income', 'expense', 'both'] as const).map(t => (
+                <button key={t} onClick={() => setNewCat(p => ({ ...p, type: t }))}
+                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-medium ${newCat.type === t ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-surface)] text-[var(--text-muted)]'}`}>
+                  {t === 'income' ? 'Thu' : t === 'expense' ? 'Chi' : 'Cả hai'}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => { if (newCat.name.trim()) { addFinanceCategory(newCat); setNewCat({ name: '', icon: '💡', type: 'expense' }); } }}
+              className="w-full py-2 rounded-xl text-xs font-semibold bg-[var(--accent-primary)] text-[var(--bg-base)] min-h-[36px]">
+              + Thêm
+            </button>
+          </div>
+        </div>
       </Section>
 
       <Section title="Thông báo" icon={<Bell size={16} className="text-[var(--accent-primary)]" />}>

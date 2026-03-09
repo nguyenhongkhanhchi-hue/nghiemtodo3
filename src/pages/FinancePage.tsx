@@ -10,6 +10,7 @@ import {
   Plus, X, Wallet, Target, Flame, ChevronDown, ChevronUp,
   PieChart as PieIcon, BarChart2, Info, Filter,
 } from 'lucide-react';
+import { CATEGORY_LABELS, TaskCategory } from '@/types';
 
 type Period = 'week' | 'month' | 'all';
 type ViewMode = 'overview' | 'chart' | 'transactions';
@@ -133,13 +134,46 @@ export default function FinancePage() {
   }, [period, now.getTime()]);
 
   // Combine task finance + manual transactions
-  const taskTx = useMemo(() =>
-    tasks.filter(t => t.status === 'done' && t.finance && t.completedAt && t.completedAt >= cutoffTime)
-      .map(t => ({
-        id: t.id, type: t.finance!.type, amount: t.finance!.amount,
-        note: t.title, category: t.category || 'other', date: t.completedAt!,
-        source: 'task' as const,
-      })), [tasks, cutoffTime]);
+  const taskTx = useMemo(() => {
+    const txs: any[] = [];
+    tasks.forEach(t => {
+      if (t.status === 'done' && t.finance && t.completedAt && t.completedAt >= cutoffTime) {
+        // Handle array of finance items
+        if (Array.isArray(t.finance)) {
+          t.finance.forEach(f => {
+            if (f.amount > 0) {
+              txs.push({
+                id: f.id || `${t.id}-${Math.random()}`,
+                type: f.type,
+                amount: f.amount,
+                note: f.note ? `${t.title} - ${f.note}` : t.title,
+                category: f.category || t.category || 'other',
+                date: t.completedAt!,
+                source: 'task',
+                taskId: t.id
+              });
+            }
+          });
+        } else {
+          // Backward compatibility for single finance object
+          const f = t.finance as any;
+          if (f.amount > 0) {
+            txs.push({
+              id: t.id,
+              type: f.type,
+              amount: f.amount,
+              note: t.title,
+              category: t.category || 'other',
+              date: t.completedAt!,
+              source: 'task',
+              taskId: t.id
+            });
+          }
+        }
+      }
+    });
+    return txs;
+  }, [tasks, cutoffTime]);
 
   const allTx = useMemo(() => [
     ...taskTx,

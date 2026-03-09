@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { useTaskStore } from '@/stores';
-import { X, Save, Check, ChevronDown } from 'lucide-react';
-import type { Task, RecurringType, TaskFinance, TaskCategory } from '@/types';
-import { CATEGORY_LABELS } from '@/types';
+import { useTaskStore, useSettingsStore } from '@/stores';
+import { X, Save, Check, ChevronDown, Plus, Trash2 } from 'lucide-react';
+import type { Task, RecurringType, TaskFinance } from '@/types';
 import { toast } from '@/lib/toast';
 import { createReminders } from '@/lib/remindersManager';
 
@@ -58,6 +57,7 @@ function CollapsibleOption({
 
 export function TaskEditModal({ task, onClose }: TaskEditModalProps) {
   const updateTask = useTaskStore(s => s.updateTask);
+  const financeCategories = useSettingsStore(s => s.financeCategories);
 
   const [title, setTitle] = useState(task.title);
   const now = new Date();
@@ -67,13 +67,16 @@ export function TaskEditModal({ task, onClose }: TaskEditModalProps) {
   const [deadlineTime, setDeadlineTime] = useState(task.deadlineTime || nowTime);
   const [recurringType, setRecurringType] = useState<RecurringType>(task.recurring?.type || 'none');
   const [notes, setNotes] = useState(task.notes || '');
-  const [finance, setFinance] = useState<TaskFinance | undefined>(task.finance);
+  
+  // task.finance is TaskFinance[]; support legacy single-object data at runtime
+  const initialFinance: TaskFinance[] = Array.isArray(task.finance) ? task.finance : [];
+      
+  const [financeItems, setFinanceItems] = useState<TaskFinance[]>(initialFinance);
+  
   const [showDeadline, setShowDeadline] = useState(task.showDeadline ?? !!task.deadline);
   const [showRecurring, setShowRecurring] = useState(task.showRecurring ?? task.recurring?.type !== 'none');
-  const [showFinance, setShowFinance] = useState(task.showFinance ?? !!task.finance);
+  const [showFinance, setShowFinance] = useState(task.showFinance ?? (!!task.finance && (Array.isArray(task.finance) ? task.finance.length > 0 : true)));
   const [showNotes, setShowNotes] = useState(task.showNotes ?? !!task.notes);
-  const [category, setCategory] = useState<TaskCategory | undefined>(task.category);
-  const [showCategory, setShowCategory] = useState(!!task.category);
   const [reminderEnabled, setReminderEnabled] = useState(task.reminderSettings?.enabled ?? false);
   const [reminderMinutesBefore, setReminderMinutesBefore] = useState(String(task.reminderSettings?.minutesBefore ?? 5));
   const [reminderRepeatTimes, setReminderRepeatTimes] = useState(String(task.reminderSettings?.repeatTimes ?? 3));
@@ -97,6 +100,9 @@ export function TaskEditModal({ task, onClose }: TaskEditModalProps) {
       repeatInterval: parseInt(reminderRepeatInterval) || 10,
     } : undefined;
     
+    // Filter out invalid finance items
+    const validFinance = showFinance ? financeItems.filter(f => f.amount > 0) : undefined;
+    
     const updatedTask: Partial<Task> = {
       title: title.trim(),
       deadline,
@@ -104,9 +110,8 @@ export function TaskEditModal({ task, onClose }: TaskEditModalProps) {
       deadlineTime: showDeadline ? deadlineTime : undefined,
       recurring: { type: showRecurring ? recurringType : 'none' },
       notes: showNotes ? notes : undefined,
-      finance: showFinance && finance ? finance : undefined,
+      finance: validFinance,
       showDeadline, showRecurring, showFinance, showNotes,
-      category: showCategory ? category : undefined,
       reminderSettings,
     };
 
@@ -120,6 +125,31 @@ export function TaskEditModal({ task, onClose }: TaskEditModalProps) {
     
     toast.success('Đã cập nhật việc');
     onClose();
+  };
+
+  const addFinanceItem = () => {
+    setFinanceItems([
+      ...financeItems,
+      {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+        type: 'expense',
+        amount: 0,
+        category: financeCategories[0]?.id || 'other',
+        note: ''
+      }
+    ]);
+  };
+
+  const removeFinanceItem = (index: number) => {
+    const newItems = [...financeItems];
+    newItems.splice(index, 1);
+    setFinanceItems(newItems);
+  };
+
+  const updateFinanceItem = (index: number, updates: Partial<TaskFinance>) => {
+    const newItems = [...financeItems];
+    newItems[index] = { ...newItems[index], ...updates };
+    setFinanceItems(newItems);
   };
 
   return (
@@ -266,32 +296,64 @@ export function TaskEditModal({ task, onClose }: TaskEditModalProps) {
               onToggle={() => {
                 const next = !showFinance;
                 setShowFinance(next);
-                if (next && !finance) setFinance({ type: 'expense', amount: 0 });
+                if (next && financeItems.length === 0) addFinanceItem();
               }}
             >
-              <div className="flex gap-2 pt-2">
-                  <select
-                    value={(finance ?? { type: 'expense', amount: 0 }).type}
-                    onChange={e => setFinance({ ...(finance ?? { type: 'expense', amount: 0 }), type: e.target.value as any })}
-                    className="bg-[var(--bg-elevated)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[32px]"
-                  >
-                    <option value="income">Thu</option>
-                    <option value="expense">Chi</option>
-                  </select>
-                  <input
-                    type="number"
-                    value={(finance ?? { type: 'expense', amount: 0 }).amount || ''}
-                    onChange={e =>
-                      setFinance({
-                        ...(finance ?? { type: 'expense', amount: 0 }),
-                        amount: Math.max(0, parseInt(e.target.value) || 0),
-                      })
-                    }
-                    placeholder="Số tiền"
-                    className="flex-1 bg-[var(--bg-elevated)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[32px] font-mono"
-                    inputMode="numeric"
-                  />
-                </div>
+              <div className="space-y-3 pt-2">
+                {financeItems.map((item, idx) => (
+                  <div key={idx} className="bg-[var(--bg-elevated)] p-2 rounded-lg border border-[var(--border-subtle)] space-y-2">
+                    <div className="flex gap-2">
+                      <select
+                        value={item.type}
+                        onChange={e => updateFinanceItem(idx, { type: e.target.value as any })}
+                        className={`rounded-lg px-2 py-1.5 text-xs font-bold outline-none border border-[var(--border-subtle)] min-h-[32px] ${
+                          item.type === 'income' ? 'bg-[var(--success)] text-white' : 'bg-[var(--error)] text-white'
+                        }`}
+                      >
+                        <option value="income">Thu</option>
+                        <option value="expense">Chi</option>
+                      </select>
+                      <input
+                        type="number"
+                        value={item.amount || ''}
+                        onChange={e => updateFinanceItem(idx, { amount: Math.max(0, parseInt(e.target.value) || 0) })}
+                        placeholder="Số tiền"
+                        className="flex-1 bg-[var(--bg-surface)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[32px] font-mono"
+                        inputMode="numeric"
+                      />
+                      <button onClick={() => removeFinanceItem(idx)} className="size-8 rounded-lg bg-[var(--bg-surface)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--error)]">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <select
+                        value={item.category}
+                        onChange={e => updateFinanceItem(idx, { category: e.target.value as any })}
+                        className="w-1/3 bg-[var(--bg-surface)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[32px]"
+                      >
+                        {financeCategories.map(fc => (
+                          <option key={fc.id} value={fc.id}>{fc.icon} {fc.name}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        value={item.note || ''}
+                        onChange={e => updateFinanceItem(idx, { note: e.target.value })}
+                        placeholder="Ghi chú chi tiêu..."
+                        className="flex-1 bg-[var(--bg-surface)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[32px]"
+                      />
+                    </div>
+                  </div>
+                ))}
+                
+                <button 
+                  onClick={addFinanceItem}
+                  className="w-full py-2 rounded-lg border border-dashed border-[var(--border-subtle)] text-xs text-[var(--text-muted)] flex items-center justify-center gap-1 hover:bg-[var(--bg-elevated)]"
+                >
+                  <Plus size={14} /> Thêm khoản thu/chi
+                </button>
+              </div>
             </CollapsibleOption>
 
             <CollapsibleOption
@@ -308,35 +370,6 @@ export function TaskEditModal({ task, onClose }: TaskEditModalProps) {
               />
             </CollapsibleOption>
 
-            <CollapsibleOption
-              label="🏷️ Danh mục"
-              active={showCategory}
-              onToggle={() => {
-                const next = !showCategory;
-                setShowCategory(next);
-                if (next && !category) setCategory('other');
-              }}
-            >
-              <div className="grid grid-cols-4 gap-1.5 pt-2">
-                {(Object.keys(CATEGORY_LABELS) as TaskCategory[]).map(cat => {
-                  const cfg = CATEGORY_LABELS[cat];
-                  return (
-                    <button
-                      key={cat}
-                      onClick={() => setCategory(cat)}
-                      className={`py-2 rounded-lg text-[9px] font-medium min-h-[36px] flex flex-col items-center justify-center gap-0.5 ${
-                        category === cat
-                          ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]'
-                          : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'
-                      }`}
-                    >
-                      <span className="text-sm">{cfg.icon}</span>
-                      <span>{cfg.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </CollapsibleOption>
           </div>
         </div>
       </div>

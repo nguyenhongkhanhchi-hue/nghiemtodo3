@@ -32,9 +32,12 @@ export interface MediaBlock {
 }
 
 export interface TaskFinance {
+  id?: string;
   type: 'income' | 'expense';
   amount: number;
+  category: string;
   note?: string;
+  createdAt?: number;
 }
 
 export interface TopicParam {
@@ -64,7 +67,7 @@ export interface Task {
   recurring: RecurringConfig;
   recurringLabel?: string;
   notes?: string;
-  finance?: TaskFinance;
+  finance?: TaskFinance[]; // Changed from TaskFinance to TaskFinance[]
   templateId?: string;
   isGroup?: boolean;
   groupTemplateIds?: string[];
