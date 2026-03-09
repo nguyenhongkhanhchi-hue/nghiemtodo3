@@ -233,19 +233,25 @@ html {
   filter: brightness(var(--screen-brightness));
 }
 
-/* Lock touch - dim the screen only, interactions handled by overlay */
+/* Lock touch - disable all interactions */
 html.lock-touch {
-  /* No pointer-events: none here - let window events work */
+  pointer-events: none;
 }
 
-/* Unlock overlay - catches touch events when locked */
-.unlock-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  touch-action: none;
+html.lock-touch * {
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
-.unlock-overlay:active {
-  cursor: grabbing;
+/* Allow ScreenControls to work when touch is locked */
+html.lock-touch .fixed.bottom-20 {
+  pointer-events: auto;
+}
+
+html.lock-touch .fixed.bottom-20 * {
+  pointer-events: auto;
+  user-select: none;
 }

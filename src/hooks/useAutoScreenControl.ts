@@ -44,17 +44,50 @@ export function useAutoScreenControl() {
     }, INACTIVITY_DELAY);
   }, [restoreScreen]);
 
-  // Swipe unlock handler - exposed for overlay to use
-  const handleSwipeUnlock = useCallback(() => {
-    if (isInactiveRef.current) {
-      restoreScreen();
-      resetInactivityTimer();
-    }
-  }, [restoreScreen, resetInactivityTimer]);
-
   useEffect(() => {
     // Only apply on mobile/tablet
     if (!isMobile) return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (!isInactiveRef.current) {
+        // Screen is active — reset timer on any touch
+        resetInactivityTimer();
+        return;
+      }
+      // Screen is dimmed/locked — record start position for swipe unlock
+      const touch = e.touches[0];
+      touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+      // Prevent propagation so locked UI doesn't receive the touch
+      e.stopPropagation();
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (isInactiveRef.current) {
+        // Prevent scrolling while locked
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (!isInactiveRef.current) return;
+
+      e.stopPropagation();
+
+      if (!touchStartRef.current) return;
+
+      const touch = e.changedTouches[0];
+      const deltaX = touch.clientX - touchStartRef.current.x;
+      const deltaY = touch.clientY - touchStartRef.current.y;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+      if (distance >= SWIPE_THRESHOLD) {
+        restoreScreen();
+        resetInactivityTimer();
+      }
+
+      touchStartRef.current = null;
+    };
 
     const handleActivity = () => {
       if (!isInactiveRef.current) {
@@ -65,26 +98,25 @@ export function useAutoScreenControl() {
     // Start inactivity timer
     resetInactivityTimer();
 
+    window.addEventListener('touchstart', handleTouchStart, { capture: true, passive: false });
+    window.addEventListener('touchmove', handleTouchMove, { capture: true, passive: false });
+    window.addEventListener('touchend', handleTouchEnd, { capture: true, passive: false });
     window.addEventListener('mousedown', handleActivity, true);
     window.addEventListener('keydown', handleActivity, true);
-    window.addEventListener('touchstart', handleActivity);
-    window.addEventListener('touchmove', handleActivity);
 
     return () => {
       if (inactivityTimeoutRef.current) {
         clearTimeout(inactivityTimeoutRef.current);
       }
+      window.removeEventListener('touchstart', handleTouchStart, true);
+      window.removeEventListener('touchmove', handleTouchMove, true);
+      window.removeEventListener('touchend', handleTouchEnd, true);
       window.removeEventListener('mousedown', handleActivity, true);
       window.removeEventListener('keydown', handleActivity, true);
-      window.removeEventListener('touchstart', handleActivity);
-      window.removeEventListener('touchmove', handleActivity);
 
       // Restore screen on unmount
       setScreenBrightnessRef.current(NORMAL_BRIGHTNESS);
       setLockTouchRef.current(false);
     };
   }, [isMobile, resetInactivityTimer, restoreScreen]);
-
-  // Return swipe handler for overlay to use
-  return { handleSwipeUnlock };
 }
