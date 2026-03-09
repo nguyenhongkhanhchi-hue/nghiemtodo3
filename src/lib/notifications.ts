@@ -1,5 +1,46 @@
 import type { Task } from '@/types';
 
+// Speak notification with voice
+export function speakNotification(text: string, voiceName?: string): void {
+  if (!('speechSynthesis' in window)) return;
+
+  // Cancel any existing speech
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'vi-VN';
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+
+  try {
+    const voices = window.speechSynthesis.getVoices();
+    let voice = null;
+
+    // Try to find Vietnamese voice
+    if (!voice) {
+      voice = voices.find(v => v.lang.startsWith('vi') && v.name.toLowerCase().includes('female'))
+        || voices.find(v => v.lang.startsWith('vi'))
+        || voices.find(v => v.lang.startsWith('vi-VN'));
+    }
+
+    // Fallback to any available voice
+    if (!voice) {
+      voice = voices.find(v => v.lang.startsWith('en'))
+        || voices[0];
+      if (voice) utterance.lang = voice.lang;
+    }
+
+    if (voice) {
+      utterance.voice = voice;
+    }
+
+    window.speechSynthesis.speak(utterance);
+  } catch (err) {
+    console.warn('Error speaking notification:', err);
+  }
+}
+
 // Request notification permission
 export async function requestNotificationPermission(): Promise<boolean> {
   if (!('Notification' in window)) return false;
@@ -117,6 +158,8 @@ export function checkDeadlineNotifications(
         `Còn ${minsLeft} phút nữa là hết hạn!`,
         `deadline-${task.id}`,
       );
+      // Speak deadline warning
+      speakNotification(`Cảnh báo, việc ${task.title} còn ${minsLeft} phút nữa là hết hạn`);
       notifiedSet.add(notifyKey);
     }
 
@@ -128,6 +171,8 @@ export function checkDeadlineNotifications(
         'Việc này đã quá hạn!',
         `overdue-${task.id}`,
       );
+      // Speak overdue notification
+      speakNotification(`Chú ý, việc ${task.title} đã quá hạn!`);
       notifiedSet.add(overdueKey);
     }
   });

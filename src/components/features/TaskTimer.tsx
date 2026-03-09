@@ -1,9 +1,8 @@
-import { useState } from 'react';
 import { useTaskStore, useSettingsStore } from '@/stores';
 import { useTickSound } from '@/hooks/useTickSound';
 import { useVietnameseVoice } from '@/hooks/useVietnameseVoice';
 import { playChime, getEncouragement } from '@/lib/soundEffects';
-import { Pause, Play, Square, Clock } from 'lucide-react';
+import { Pause, Play, Square, Clock, Volume2, VolumeX, Mic, MicOff } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { requestWakeLock, releaseWakeLock } from '@/lib/wakeLock';
 
@@ -16,6 +15,8 @@ export function TaskTimer() {
   const resumeTimer = useTaskStore(s => s.resumeTimer);
   const tickSoundEnabled = useSettingsStore(s => s.tickSoundEnabled);
   const voiceEnabled = useSettingsStore(s => s.voiceEnabled);
+  const setTickSound = useSettingsStore(s => s.setTickSound);
+  const setVoiceEnabled = useSettingsStore(s => s.setVoiceEnabled);
   const voiceSettings = useSettingsStore(s => s.voiceSettings);
   const { playTick } = useTickSound();
   const { speak, announceTime } = useVietnameseVoice();
@@ -99,6 +100,26 @@ export function TaskTimer() {
           {formatTime(timer.elapsed)}
         </div>
         <div className="flex items-center gap-1">
+          <button 
+            onClick={() => setTickSound(!tickSoundEnabled)}
+            title={tickSoundEnabled ? 'Tắt âm thanh tik tak' : 'Bật âm thanh tik tak'}
+            className={`size-9 rounded-xl flex items-center justify-center transition-colors ${
+              tickSoundEnabled 
+                ? 'bg-[rgba(59,130,246,0.2)] text-blue-500' 
+                : 'bg-[rgba(107,114,128,0.2)] text-gray-500'
+            }`}>
+            {tickSoundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+          </button>
+          <button 
+            onClick={() => setVoiceEnabled(!voiceEnabled)}
+            title={voiceEnabled ? 'Tắt báo giọng nói' : 'Bật báo giọng nói'}
+            className={`size-9 rounded-xl flex items-center justify-center transition-colors ${
+              voiceEnabled 
+                ? 'bg-[rgba(34,197,94,0.2)] text-green-500' 
+                : 'bg-[rgba(107,114,128,0.2)] text-gray-500'
+            }`}>
+            {voiceEnabled ? <Mic size={16} /> : <MicOff size={16} />}
+          </button>
           <button onClick={() => timer.isPaused ? resumeTimer() : pauseTimer()}
             className={`size-9 rounded-xl flex items-center justify-center ${timer.isPaused ? 'bg-[rgba(0,229,204,0.2)] text-[var(--accent-primary)]' : 'bg-[rgba(251,191,36,0.2)] text-[var(--warning)]'}`}>
             {timer.isPaused ? <Play size={16} /> : <Pause size={16} />}

@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { useSettingsStore, useAuthStore, useTaskStore, useChatStore, useGamificationStore, useTemplateStore, useTopicStore } from '@/stores';
 import { supabase } from '@/lib/supabase';
 import { checkDeadlineNotifications } from '@/lib/notifications';
+import { getTriggeredReminders } from '@/lib/remindersManager';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { ToastContainer } from '@/components/layout/ToastContainer';
 import { TaskTimer } from '@/components/features/TaskTimer';
+import { ReminderAlert } from '@/components/features/ReminderAlert';
 import { LucyChatFAB } from '@/pages/AIPage';
 import { UnifiedFAB } from '@/components/layout/UnifiedFAB';
 import { AddTaskSheet } from '@/components/features/AddTaskInput';
@@ -18,7 +20,7 @@ import FinancePage from '@/pages/FinancePage';
 import GroupChatPage from '@/pages/GroupChatPage';
 import AdminPage from '@/pages/AdminPage';
 import NotificationsPage from '@/pages/NotificationsPage';
-import type { TaskTemplate } from '@/types';
+import type { TaskTemplate, Reminder } from '@/types';
 
 export default function App() {
   const currentPage = useSettingsStore(s => s.currentPage);
@@ -41,6 +43,7 @@ export default function App() {
   const [showLucy, setShowLucy] = useState(false);
   const [showTemplateEditor, setShowTemplateEditor] = useState(false);
   const [templateMode, setTemplateMode] = useState<'single' | 'group'>('single');
+  const [triggeredReminder, setTriggeredReminder] = useState<Reminder | null>(null);
 
   // Font scale
   useEffect(() => { document.documentElement.style.setProperty('--font-scale', String(fontScale)); }, [fontScale]);
@@ -118,6 +121,21 @@ export default function App() {
     return () => clearInterval(i);
   }, [user?.id, tasks.length, timezone, notificationSettings.enabled]);
 
+  // ✅ Check triggered reminders (mỗi 2 giây)
+  useEffect(() => {
+    if (!user) return;
+    const check = () => {
+      const triggered = getTriggeredReminders(tasks);
+      if (triggered.length > 0 && !triggeredReminder) {
+        // Hiển thị reminder đầu tiên
+        setTriggeredReminder(triggered[0]);
+      }
+    };
+    check();
+    const i = setInterval(check, 2000);
+    return () => clearInterval(i);
+  }, [user?.id, tasks.length, triggeredReminder]);
+
   if (isLoading) {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center bg-[var(--bg-base)]">
@@ -168,6 +186,13 @@ export default function App() {
         showLucy={showLucy}
       />
       {showAddTask && <AddTaskSheet onClose={() => setShowAddTask(false)} />}
+      {triggeredReminder && (
+        <ReminderAlert
+          reminder={triggeredReminder}
+          taskTitle={tasks.find(t => t.id === triggeredReminder.taskId)?.title || 'Việc không xác định'}
+          onAcknowledge={() => setTriggeredReminder(null)}
+        />
+      )}
       {showLucy && (
         <div className={`fixed inset-0 z-[55] flex bg-[var(--bg-base)] ${
           isLandscape ? 'right-0 left-auto w-96' : 'flex-col'

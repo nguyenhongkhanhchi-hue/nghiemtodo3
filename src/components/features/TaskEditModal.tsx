@@ -4,6 +4,7 @@ import { X, Save, Check, ChevronDown } from 'lucide-react';
 import type { Task, RecurringType, TaskFinance, TaskCategory } from '@/types';
 import { CATEGORY_LABELS } from '@/types';
 import { toast } from '@/lib/toast';
+import { createReminders } from '@/lib/remindersManager';
 
 interface TaskEditModalProps { task: Task; onClose: () => void; }
 
@@ -73,6 +74,11 @@ export function TaskEditModal({ task, onClose }: TaskEditModalProps) {
   const [showNotes, setShowNotes] = useState(task.showNotes ?? !!task.notes);
   const [category, setCategory] = useState<TaskCategory | undefined>(task.category);
   const [showCategory, setShowCategory] = useState(!!task.category);
+  const [showReminder, setShowReminder] = useState(!!task.reminderSettings?.enabled);
+  const [reminderEnabled, setReminderEnabled] = useState(task.reminderSettings?.enabled ?? false);
+  const [reminderMinutesBefore, setReminderMinutesBefore] = useState(String(task.reminderSettings?.minutesBefore ?? 5));
+  const [reminderRepeatTimes, setReminderRepeatTimes] = useState(String(task.reminderSettings?.repeatTimes ?? 3));
+  const [reminderRepeatInterval, setReminderRepeatInterval] = useState(String(task.reminderSettings?.repeatInterval ?? 10));
 
   const handleSave = () => {
     if (!title.trim()) {
@@ -84,8 +90,15 @@ export function TaskEditModal({ task, onClose }: TaskEditModalProps) {
     if (showDeadline && deadlineDate) {
       deadline = new Date(`${deadlineDate}T${deadlineTime || '23:59'}:00`).getTime();
     }
+
+    const reminderSettings = showReminder && reminderEnabled && deadline ? {
+      enabled: true,
+      minutesBefore: parseInt(reminderMinutesBefore) || 5,
+      repeatTimes: parseInt(reminderRepeatTimes) || 3,
+      repeatInterval: parseInt(reminderRepeatInterval) || 10,
+    } : undefined;
     
-    updateTask(task.id, {
+    const updatedTask: Partial<Task> = {
       title: title.trim(),
       deadline,
       deadlineDate: showDeadline ? deadlineDate : undefined,
@@ -95,7 +108,16 @@ export function TaskEditModal({ task, onClose }: TaskEditModalProps) {
       finance: showFinance && finance ? finance : undefined,
       showDeadline, showRecurring, showFinance, showNotes,
       category: showCategory ? category : undefined,
-    });
+      reminderSettings,
+    };
+
+    // Tạo reminders từ settings
+    if (reminderSettings && deadline) {
+      const testTask: Task = { ...task, ...updatedTask, deadline } as Task;
+      updatedTask.reminders = createReminders(testTask);
+    }
+    
+    updateTask(task.id, updatedTask);
     
     toast.success('Đã cập nhật việc');
     onClose();
@@ -216,6 +238,89 @@ export function TaskEditModal({ task, onClose }: TaskEditModalProps) {
                 rows={3}
                 className="w-full mt-2 bg-[var(--bg-surface)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none border border-[var(--border-subtle)] resize-none"
               />
+            </CollapsibleOption>
+
+            <CollapsibleOption
+              label="🔔 Nhắc Nhở"
+              active={showReminder}
+              onToggle={() => setShowReminder(!showReminder)}
+            >
+              <div className="space-y-3 pt-2">
+                {!showDeadline && (
+                  <div className="text-xs text-red-500 bg-red-500/10 p-2 rounded">
+                    ⚠️ Vui lòng bật "Hạn chót" trước khi thiết lập nhắc nhở
+                  </div>
+                )}
+                
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="reminderEnabled"
+                    checked={reminderEnabled}
+                    onChange={e => setReminderEnabled(e.target.checked)}
+                    disabled={!showDeadline}
+                    className="size-4 rounded"
+                  />
+                  <label htmlFor="reminderEnabled" className="text-xs font-medium text-[var(--text-primary)]">
+                    Bật nhắc nhở
+                  </label>
+                </div>
+
+                {reminderEnabled && showDeadline && (
+                  <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
+                    <div>
+                      <label className="text-xs font-medium text-[var(--text-primary)] block mb-1">
+                        Nhắc nhở trước: <span className="text-[var(--accent-primary)]">{reminderMinutesBefore} phút</span>
+                      </label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="60"
+                        value={reminderMinutesBefore}
+                        onChange={e => setReminderMinutesBefore(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-[var(--text-primary)] block mb-1">
+                        Số lần nhắc nhở: <span className="text-[var(--accent-primary)]">{reminderRepeatTimes} lần</span>
+                      </label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="10"
+                        value={reminderRepeatTimes}
+                        onChange={e => setReminderRepeatTimes(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-[var(--text-primary)] block mb-1">
+                        Khoảng cách giữa các lần: <span className="text-[var(--accent-primary)]">{reminderRepeatInterval} giây</span>
+                      </label>
+                      <input
+                        type="range"
+                        min="5"
+                        max="60"
+                        value={reminderRepeatInterval}
+                        onChange={e => setReminderRepeatInterval(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div className="bg-[var(--bg-base)] rounded p-2 mt-2">
+                      <p className="text-xs text-[var(--text-muted)]">
+                        📢 Hoạt động: Thông báo đẩy + Chuông + Giọng nói
+                      </p>
+                      <p className="text-xs text-[var(--text-muted)]">
+                        ✋ Yêu cầu: Phải bấm "Đã Hiểu Rồi" mới dừng
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </CollapsibleOption>
 
             <CollapsibleOption

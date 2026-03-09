@@ -7,6 +7,16 @@ export type TaskCategory = 'work' | 'personal' | 'health' | 'learning' | 'financ
 export type ThemeMode = 'dark' | 'light';
 export type UserRole = 'admin' | 'user' | 'blocked';
 
+export interface Reminder {
+  id: string;
+  taskId: string;
+  triggerTime: number; // Timestamp khi trigger reminder
+  repeatCount: number; // Số lần nhắc nhở (1, 2, 3, ...)
+  repeatInterval: number; // Khoảng cách giữa các lần nhắc (ms)
+  acknowledged: boolean; // Đã bấm OK chưa
+  createdAt: number;
+}
+
 export interface RecurringConfig {
   type: RecurringType;
   customDays?: number[];
@@ -64,6 +74,13 @@ export interface Task {
   showNotes?: boolean;
   category?: TaskCategory;
   sharedWith?: string[];
+  reminders?: Reminder[];
+  reminderSettings?: {
+    enabled: boolean;
+    minutesBefore: number; // Nhắc nhở bao nhiêu phút trước deadline
+    repeatTimes: number; // Nhắc nhở bao nhiêu lần
+    repeatInterval: number; // Khoảng cách giữa các lần (giây)
+  };
 }
 
 export interface TaskTemplate {
