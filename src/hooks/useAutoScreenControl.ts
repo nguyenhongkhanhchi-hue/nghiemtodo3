@@ -22,9 +22,7 @@ export function useAutoScreenControl() {
     return;
   }
 
-  const clearTapTimer = () => {
-    if (tapResetTimeoutRef.current) {
-      clearTiHoldTimer = () => {
+  const clearHoldTimer = () => {
     if (holdTimeoutRef.current) {
       clearTimeout(holdTimeoutRef.current);
       holdTimeoutRef.current = null;
@@ -32,7 +30,9 @@ export function useAutoScreenControl() {
   };
 
   const restoreScreen = () => {
-    clearHoldTimer()
+    clearHoldTimer();
+    setScreenBrightness(NORMAL_BRIGHTNESS);
+    setLockTouch(false);
     isInactiveRef.current = false;
   };
 
@@ -52,12 +52,10 @@ export function useAutoScreenControl() {
       setScreenBrightness(REDUCED_BRIGHTNESS);
       setLockTouch(true);
       isInactiveRef.current = true;
-      tapCountRef.current = 0;
-      lastTapTimeRef.current = 0;
-    
-  const handleTap = () => {
-    // If screen is not dimmed, just reset inactivity timer
-    if (!isInacouchStart = () => {
+    }, INACTIVITY_DELAY);
+  };
+
+  const handleTouchStart = () => {
     // If screen is not dimmed, just reset inactivity timer
     if (!isInactiveRef.current) {
       resetInactivityTimer();
@@ -75,7 +73,9 @@ export function useAutoScreenControl() {
   const handleTouchEnd = () => {
     // If hold is in progress and screen is dimmed, cancel it
     if (holdTimeoutRef.current && isInactiveRef.current) {
-      clearHoldTimer(
+      clearHoldTimer();
+    }
+  };
 
   const handleOtherActivity = () => {
     // Non-touch activity (mouse, keyboard) - only work if not dimmed
@@ -88,23 +88,7 @@ export function useAutoScreenControl() {
     // Start initial timer
     resetInactivityTimer();
 
-    // Add listeners for touch (tap detection)
-    window.addEventListener('touchend', handleTap, true);
-
-    // Mouse/keyboard only reset timer if not dimmed
-    window.addEventListener('mousedown', handleOtherActivity, true);
-    window.addEventListener('click', handleOtherActivity, true);
-    window.addEventListener('keydown', handleOtherActivity, true);
-
-    return () => {
-      // Cleanup
-      if (inactivityTimeoutRef.current) {
-        clearTimeout(inactivityTimeoutRef.current);
-      }
-      clearTapTimer();
-
-      window.removeEventListener('touchend', handleTap, true);
-      window.removeEventListenerhold detection)
+    // Add listeners for touch (hold detection)
     window.addEventListener('touchstart', handleTouchStart, true);
     window.addEventListener('touchend', handleTouchEnd, true);
 
@@ -121,4 +105,10 @@ export function useAutoScreenControl() {
       clearHoldTimer();
 
       window.removeEventListener('touchstart', handleTouchStart, true);
-      window.removeEventListener('touchend', handleTouchEnd
+      window.removeEventListener('touchend', handleTouchEnd, true);
+      window.removeEventListener('mousedown', handleOtherActivity, true);
+      window.removeEventListener('click', handleOtherActivity, true);
+      window.removeEventListener('keydown', handleOtherActivity, true);
+    };
+  }, [setScreenBrightness, setLockTouch]);
+}
