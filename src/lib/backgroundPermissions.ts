@@ -40,12 +40,14 @@ export async function requestBackgroundPermissions(): Promise<{
         console.log('Service Worker ready for background tasks');
         
         // Attempt to enable persistent notifications via Background Sync
-        if ('sync' in registration) {
+        // Only register if we have a valid window context (required by the API)
+        if ('sync' in registration && typeof window !== 'undefined' && !document.hidden) {
           try {
-            (registration as any).sync.register('background-reminders');
+            await (registration as any).sync.register('bg-reminders');
             console.log('Background Sync registered');
           } catch (err) {
-            console.warn('Background Sync registration failed:', err);
+            // Background Sync may not be supported or window context is missing — safe to ignore
+            console.warn('Background Sync not available:', err);
           }
         }
       } catch (err) {
