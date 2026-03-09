@@ -5,12 +5,12 @@ import { useIsMobile } from '@/hooks/use-mobile';
 const INACTIVITY_DELAY = 5000; // 5 seconds
 const REDUCED_BRIGHTNESS = 5; // 5% brightness when dimmed
 const NORMAL_BRIGHTNESS = 100;
-const HOLD_DURATION = 2000; // 2 seconds to unlock
+const SWIPE_THRESHOLD = 100; // Minimum swipe distance in pixels
 
 export function useAutoScreenControl() {
   const isMobile = useIsMobile();
   const inactivityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const holdTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const screenBrightness = useSettingsStore(s => s.screenBrightness);
   const lockTouch = useSettingsStore(s => s.lockTouch);
   const setScreenBrightness = useSettingsStore(s => s.setScreenBrightness);
@@ -22,15 +22,7 @@ export function useAutoScreenControl() {
     return;
   }
 
-  const clearHoldTimer = () => {
-    if (holdTimeoutRef.current) {
-      clearTimeout(holdTimeoutRef.current);
-      holdTimeoutRef.current = null;
-    }
-  };
-
   const restoreScreen = () => {
-    clearHoldTimer();
     setScreenBrightness(NORMAL_BRIGHTNESS);
     setLockTouch(false);
     isInactiveRef.current = false;
@@ -55,26 +47,37 @@ export function useAutoScreenControl() {
     }, INACTIVITY_DELAY);
   };
 
-  const handleTouchStart = () => {
+  const handleTouchStart = (e: TouchEvent) => {
     // If screen is not dimmed, just reset inactivity timer
     if (!isInactiveRef.current) {
       resetInactivityTimer();
       return;
     }
 
-    // Screen is dimmed - start hold timer
-    if (!holdTimeoutRef.current) {
-      holdTimeoutRef.current = setTimeout(() => {
-        restoreScreen();
-      }, HOLD_DURATION);
-    }
+    // Screen is dimmed - record touch start position for swipe detection
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
   };
 
-  const handleTouchEnd = () => {
-    // If hold is in progress and screen is dimmed, cancel it
-    if (holdTimeoutRef.current && isInactiveRef.current) {
-      clearHoldTimer();
+  const handleTouchEnd = (e: TouchEvent) => {
+    // If screen is not dimmed, do nothing
+    if (!isInactiveRef.current || !touchStartRef.current) {
+      return;
     }
+
+    // Calculate swipe distance
+    const touch = e.changedTouches[0];
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = touch.clientY - touchStartRef.current.y;
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+    // If swipe distance is enough, unlock the screen
+    if (distance >= SWIPE_THRESHOLD) {
+      restoreScreen();
+    }
+
+    // Reset touch start position
+    touchStartRef.current = null;
   };
 
   const handleOtherActivity = () => {
@@ -102,7 +105,6 @@ export function useAutoScreenControl() {
       if (inactivityTimeoutRef.current) {
         clearTimeout(inactivityTimeoutRef.current);
       }
-      clearHoldTimer();
 
       window.removeEventListener('touchstart', handleTouchStart, true);
       window.removeEventListener('touchend', handleTouchEnd, true);
