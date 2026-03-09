@@ -13,10 +13,11 @@ import { calculateQuadrant, isTaskOverdue } from '@/lib/autoQuadrant';
 import { toast } from '@/lib/toast';
 import {
   playTaskCreatedSound,
-  playTaskCompleteSound,
   playTaskDeleteSound,
   playTimerStartSound,
   playTimerPauseSound,
+  playTimerFinishSound,
+  playTaskCelebrationSound,
 } from '@/lib/soundEffects';
 import {
   loadTasksFromDB, saveTasksToDB,
@@ -54,7 +55,15 @@ export const useAuthStore = create<AuthStore>((set) => ({
   isLoading: true,
   setUser: (user) => set({ user, isLoading: false }),
   setLoading: (isLoading) => set({ isLoading }),
-  logout: () => set({ user: null }),
+  logout: async () => {
+    localStorage.setItem('nw_signed_out', 'true');
+    localStorage.removeItem('nw_admin_session');
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      await supabase.auth.signOut();
+    } catch {}
+    set({ user: null });
+  },
 }));
 
 // ──────────── TASK STORE ────────────
@@ -190,7 +199,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     });
     if (userId && userId !== 'admin') saveTasksToDB(userId, updated);
     useGamificationStore.getState().onTaskCompleted(task.quadrant, task.duration || 0, tz, xpEarned);
-    playTaskCompleteSound();
+    playTaskCelebrationSound();
   },
 
   restoreTask: (id) => {
@@ -302,6 +311,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       localStorage.removeItem(getUserKey('nw_timer', userId));
       set({ tasks: updated, timer: { ...defaultTimer } });
       if (userId && userId !== 'admin') saveTasksToDB(userId, updated);
+      playTimerFinishSound();
     } else set({ timer: { ...defaultTimer } });
   },
   tickTimer: () => {

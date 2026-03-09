@@ -50,8 +50,8 @@ export default function App() {
   const [triggeredReminder, setTriggeredReminder] = useState<Reminder | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Auto screen control (dim + lock after 15s inactivity)
-  const { handleSwipeUnlock } = useAutoScreenControl();
+  // Auto screen control (dim + lock after 15s inactivity) — only when logged in
+  const { handleSwipeUnlock } = useAutoScreenControl(!!user);
 
   // Font scale
   useEffect(() => { document.documentElement.style.setProperty('--font-scale', String(fontScale)); }, [fontScale]);
@@ -84,9 +84,16 @@ export default function App() {
     }
   }, []);
 
-  // Auth session - persistent login
+  // Auth session - persistent login (skip if user explicitly signed out)
   useEffect(() => {
     let mounted = true;
+
+    // If user explicitly signed out, do NOT auto-login
+    const signedOut = localStorage.getItem('nw_signed_out');
+    if (signedOut === 'true') {
+      setLoading(false);
+      return;
+    }
 
     // Check for admin login
     const adminSession = localStorage.getItem('nw_admin_session');
@@ -104,6 +111,8 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
       if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
+        // Clear signed-out flag on new login
+        localStorage.removeItem('nw_signed_out');
         const u = session.user;
         setUser({ id: u.id, email: u.email!, username: u.user_metadata?.username || u.email!.split('@')[0] });
       } else if (event === 'SIGNED_OUT') {

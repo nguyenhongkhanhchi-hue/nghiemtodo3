@@ -342,6 +342,84 @@ export function playBreakSound() {
   });
 }
 
+// ========== SPECIAL CELEBRATION SOUNDS ==========
+
+// Timer finished — epic multi-note fanfare
+export function playTimerFinishSound() {
+  if (isMuted) return;
+  try {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+
+    // Ascending fanfare: C5 E5 G5 C6
+    const notes = [523.25, 659.25, 783.99, 1046.50];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.setValueAtTime(freq, now + i * 0.12);
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.18, now + i * 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.5);
+      osc.start(now + i * 0.12);
+      osc.stop(now + i * 0.12 + 0.5);
+    });
+
+    // Extra sparkle burst after fanfare
+    const sparkleNotes = [1318.51, 1567.98, 2093.0];
+    sparkleNotes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.setValueAtTime(freq, now + 0.6 + i * 0.07);
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.08, now + 0.6 + i * 0.07);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6 + i * 0.07 + 0.15);
+      osc.start(now + 0.6 + i * 0.07);
+      osc.stop(now + 0.6 + i * 0.07 + 0.15);
+    });
+  } catch (e) {}
+}
+
+// Task complete — celebratory "level up" sound
+export function playTaskCelebrationSound() {
+  if (isMuted) return;
+  try {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+
+    // Coin-collect style: quick ascending trio
+    const notes = [659.25, 783.99, 1046.50];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.setValueAtTime(freq, now + i * 0.08);
+      osc.type = 'triangle';
+      gain.gain.setValueAtTime(0.15, now + i * 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.25);
+      osc.start(now + i * 0.08);
+      osc.stop(now + i * 0.08 + 0.25);
+    });
+
+    // Shimmer on top
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(1396.91, now + 0.28);
+    osc.frequency.exponentialRampToValueAtTime(2093.0, now + 0.5);
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.07, now + 0.28);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+    osc.start(now + 0.28);
+    osc.stop(now + 0.55);
+  } catch (e) {}
+}
+
 // Legacy alias
 export const playCompletionSound = playTaskCompleteSound;
 

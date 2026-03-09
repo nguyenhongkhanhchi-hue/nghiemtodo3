@@ -34,6 +34,7 @@ export default function AuthPage() {
       const { data, error: e } = await supabase.auth.verifyOtp({ email, token: otp, type: 'email' });
       if (e) throw e;
       if (data.user) {
+        localStorage.removeItem('nw_signed_out');
         // Check if user has password set
         const hasPassword = data.user.user_metadata?.has_password;
         if (!hasPassword) {
@@ -55,6 +56,7 @@ export default function AuthPage() {
       const { data, error: e } = await supabase.auth.updateUser({ password, data: { username, has_password: true } });
       if (e) throw e;
       if (data.user) {
+        localStorage.removeItem('nw_signed_out');
         setUser({ id: data.user.id, email: data.user.email!, username });
       }
     } catch (e: any) { setError(e.message); }
@@ -63,6 +65,7 @@ export default function AuthPage() {
 
   const handleAdminLogin = () => {
     if (adminCode === '2026Phattrien$') {
+      localStorage.removeItem('nw_signed_out');
       localStorage.setItem('nw_admin_session', 'true');
       setUser({ id: 'admin', email: 'admin@nghiemwork.local', username: 'Admin' });
     } else {

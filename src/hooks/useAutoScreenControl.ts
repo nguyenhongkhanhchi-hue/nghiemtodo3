@@ -7,7 +7,7 @@ const REDUCED_BRIGHTNESS = 5;  // 5% brightness when dimmed
 const NORMAL_BRIGHTNESS = 100;
 const SWIPE_THRESHOLD = 80;    // Minimum swipe distance in pixels
 
-export function useAutoScreenControl() {
+export function useAutoScreenControl(isLoggedIn = false) {
   const isMobile = useIsMobile();
   const inactivityTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -53,8 +53,13 @@ export function useAutoScreenControl() {
   }, [restoreScreen, resetInactivityTimer]);
 
   useEffect(() => {
-    // Only apply on mobile/tablet
-    if (!isMobile) return;
+    // Only apply on mobile/tablet AND when user is logged in
+    if (!isMobile || !isLoggedIn) {
+      // Ensure screen is restored if user logs out
+      setScreenBrightnessRef.current(NORMAL_BRIGHTNESS);
+      setLockTouchRef.current(false);
+      return;
+    }
 
     const handleActivity = () => {
       if (!isInactiveRef.current) {
@@ -83,7 +88,7 @@ export function useAutoScreenControl() {
       setScreenBrightnessRef.current(NORMAL_BRIGHTNESS);
       setLockTouchRef.current(false);
     };
-  }, [isMobile, resetInactivityTimer, restoreScreen]);
+  }, [isMobile, isLoggedIn, resetInactivityTimer, restoreScreen]);
 
   // Return swipe handler for overlay to use
   return { handleSwipeUnlock };

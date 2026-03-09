@@ -8,14 +8,14 @@ import type { Task, EisenhowerQuadrant, TaskStatus, TaskCategory } from '@/types
 import { isTaskOverdue } from '@/lib/autoQuadrant';
 import { toast } from '@/lib/toast';
 import { playTabSound } from '@/lib/soundEffects';
-import { Play, Pause, Check, Trash2, RotateCcw, ChevronDown, Search, X, AlertCircle, ArrowUpDown } from 'lucide-react';
+import { Play, Pause, Check, Trash2, RotateCcw, Search, X, ArrowUpDown } from 'lucide-react';
 
 // Tab types
 type ActiveTab = EisenhowerQuadrant | 'overdue';
-type DoFirstTab = 'pending' | 'in_progress' | 'paused' | 'done' | 'overdue';
-type ScheduleTab = 'tomorrow' | '3days' | 'week' | 'month' | 'year' | 'overdue';
-type DelegateTab = string; // 'all' | 'overdue' | userId
-type EliminateTab = 'all' | 'overdue';
+type DoFirstTab = 'pending' | 'in_progress' | 'paused' | 'done';
+type ScheduleTab = 'tomorrow' | '3days' | 'week' | 'month' | 'year';
+type DelegateTab = string; // 'all' | userId
+type EliminateTab = 'all';
 
 export function TaskList() {
   const tasks = useTaskStore(s => s.tasks);
@@ -33,9 +33,8 @@ export function TaskList() {
   const [doFirstTab, setDoFirstTab] = useState<DoFirstTab>('pending');
   const [scheduleTab, setScheduleTab] = useState<ScheduleTab>('tomorrow');
   const [delegateTab, setDelegateTab] = useState<DelegateTab>('all');
-  const [eliminateTab, setEliminateTab] = useState<EliminateTab>('all');
+  const [eliminateTab] = useState<EliminateTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchExpanded, setSearchExpanded] = useState(false);
   const [sortBy, setSortBy] = useState<'deadline' | 'title' | 'created' | 'none'>('none');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
@@ -84,11 +83,7 @@ export function TaskList() {
 
     // Filter by tab-specific sub-tab
     if (activeTab === 'do_first') {
-      if (doFirstTab === 'overdue') {
-        result = result.filter(t => isTaskOverdue(t));
-      } else {
-        result = result.filter(t => t.status === doFirstTab && (doFirstTab !== 'pending' || !isTaskOverdue(t)));
-      }
+      result = result.filter(t => t.status === doFirstTab && (doFirstTab !== 'pending' || !isTaskOverdue(t)));
     } else if (activeTab === 'schedule') {
       const tomorrow = new Date(now + 86400000);
       tomorrow.setHours(23, 59, 59, 999);
@@ -104,9 +99,6 @@ export function TaskList() {
       year.setHours(0, 0, 0, 0);
 
       switch (scheduleTab) {
-        case 'overdue':
-          result = result.filter(t => isTaskOverdue(t));
-          break;
         case 'tomorrow':
           result = result.filter(t => t.deadline && t.deadline <= tomorrow.getTime());
           break;
@@ -124,14 +116,8 @@ export function TaskList() {
           break;
       }
     } else if (activeTab === 'delegate') {
-      if (delegateTab === 'overdue') {
-        result = result.filter(t => isTaskOverdue(t));
-      } else if (delegateTab !== 'all') {
+      if (delegateTab !== 'all') {
         result = result.filter(t => t.sharedWith?.includes(delegateTab));
-      }
-    } else if (activeTab === 'eliminate') {
-      if (eliminateTab === 'overdue') {
-        result = result.filter(t => isTaskOverdue(t));
       }
     }
 
@@ -256,22 +242,19 @@ export function TaskList() {
         })}
       </div>
 
-      {/* Sub-tabs + Search */}
-      <div className="relative mb-2">
+      {/* Sub-tabs */}
+      <div className="mb-2">
         <div className="flex items-center gap-1">
           {/* Sub-tabs for Do First */}
           {activeTab === 'do_first' && (
-            <div className="flex-1 flex flex-wrap gap-1 overflow-x-auto pb-0.5">
+            <div className="flex-1 flex gap-1 overflow-x-auto pb-0.5">
               {([
                 { key: 'pending' as DoFirstTab, label: 'Chưa làm', icon: '⏳' },
                 { key: 'in_progress' as DoFirstTab, label: 'Đang làm', icon: '▶️' },
                 { key: 'paused' as DoFirstTab, label: 'Tạm dừng', icon: '⏸️' },
                 { key: 'done' as DoFirstTab, label: 'Xong', icon: '✅' },
-                { key: 'overdue' as DoFirstTab, label: 'Quá hạn', icon: '🔥' },
               ]).map(tab => {
-                const count = tab.key === 'overdue'
-                  ? tabTasks.filter(t => isTaskOverdue(t)).length
-                  : tabTasks.filter(t => t.status === tab.key && (tab.key !== 'pending' || !isTaskOverdue(t))).length;
+                const count = tabTasks.filter(t => t.status === tab.key && (tab.key !== 'pending' || !isTaskOverdue(t))).length;
                 return (
                   <button key={tab.key} onClick={() => { setDoFirstTab(tab.key); playTabSound(); }}
                     className={`flex-shrink-0 px-2 py-1 rounded-lg text-[9px] font-medium h-auto flex items-center gap-0.5 ${doFirstTab === tab.key ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
@@ -284,14 +267,13 @@ export function TaskList() {
 
           {/* Sub-tabs for Schedule */}
           {activeTab === 'schedule' && (
-            <div className="flex-1 flex flex-wrap gap-1 overflow-x-auto pb-0.5">
+            <div className="flex-1 flex gap-1 overflow-x-auto pb-0.5">
               {([
                 { key: 'tomorrow' as ScheduleTab, label: 'Ngày mai', icon: '📅' },
                 { key: '3days' as ScheduleTab, label: '3 ngày tới', icon: '📆' },
                 { key: 'week' as ScheduleTab, label: 'Tuần tới', icon: '🗓️' },
                 { key: 'month' as ScheduleTab, label: 'Tháng tới', icon: '📊' },
                 { key: 'year' as ScheduleTab, label: 'Trong năm', icon: '🗓️' },
-                { key: 'overdue' as ScheduleTab, label: 'Quá hạn', icon: '🔥' },
               ]).map(tab => {
                 const tomorrow = new Date(now + 86400000).setHours(23, 59, 59, 999);
                 const threeDays = new Date(now + 259200000).setHours(23, 59, 59, 999);
@@ -325,14 +307,10 @@ export function TaskList() {
 
           {/* Sub-tabs for Delegate */}
           {activeTab === 'delegate' && (
-            <div className="flex-1 flex flex-wrap gap-1 overflow-x-auto pb-0.5">
+            <div className="flex-1 flex gap-1 overflow-x-auto pb-0.5">
               <button onClick={() => { setDelegateTab('all'); playTabSound(); }}
                 className={`flex-shrink-0 px-2 py-1 rounded-lg text-[9px] font-medium h-auto flex items-center gap-0.5 ${delegateTab === 'all' ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
                 👥 Tất cả ({tabTasks.length})
-              </button>
-              <button onClick={() => { setDelegateTab('overdue'); playTabSound(); }}
-                className={`flex-shrink-0 px-2 py-1 rounded-lg text-[9px] font-medium h-auto flex items-center gap-0.5 ${delegateTab === 'overdue' ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
-                🔥 Quá hạn ({tabTasks.filter(t => isTaskOverdue(t)).length})
               </button>
               {delegatedUsers.map(u => (
                 <button key={u.id} onClick={() => { setDelegateTab(u.id); playTabSound(); }}
@@ -347,78 +325,69 @@ export function TaskList() {
           )}
 
           {activeTab === 'eliminate' && (
-            <div className="flex-1 flex flex-wrap gap-1 overflow-x-auto pb-0.5">
-              <button onClick={() => { setEliminateTab('all'); playTabSound(); }}
-                className={`flex-shrink-0 px-2 py-1 rounded-lg text-[9px] font-medium h-auto flex items-center gap-0.5 ${eliminateTab === 'all' ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
-                Tất cả ({tabTasks.length})
-              </button>
-              <button onClick={() => { setEliminateTab('overdue'); playTabSound(); }}
-                className={`flex-shrink-0 px-2 py-1 rounded-lg text-[9px] font-medium h-auto flex items-center gap-0.5 ${eliminateTab === 'overdue' ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
-                🔥 Quá hạn ({tabTasks.filter(t => isTaskOverdue(t)).length})
-              </button>
+            <div className="flex-1 flex gap-1 overflow-x-auto pb-0.5">
+              <span className="text-[10px] text-[var(--text-muted)] px-2 py-1">Tất cả ({tabTasks.length} việc)</span>
             </div>
           )}
+        </div>
 
-          {/* Sort */}
+        {/* Search + Sort toolbar — always below subtabs */}
+        <div className="flex items-center gap-2 mb-2">
+          {/* Search bar */}
+          <div className="relative flex-1">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Tìm kiếm..."
+              className="w-full bg-[var(--bg-elevated)] rounded-lg pl-8 pr-7 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none border border-[var(--border-subtle)] focus:border-[var(--accent-primary)] min-h-[32px]"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 size-5 rounded flex items-center justify-center text-[var(--text-muted)]">
+                <X size={11} />
+              </button>
+            )}
+          </div>
+          {/* Sort button */}
           <div className="relative flex-shrink-0">
             <button onClick={() => setSortMenuOpen(!sortMenuOpen)}
-              className={`size-8 rounded-lg flex items-center justify-center ${sortBy !== 'none' ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
-              <ArrowUpDown size={14} />
+              className={`h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-[10px] font-medium border ${sortBy !== 'none' ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)] border-[var(--border-accent)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-subtle)]'}`}>
+              <ArrowUpDown size={12} />
+              {sortBy === 'none' ? 'Sắp xếp' : sortBy === 'deadline' ? 'Hạn chót' : sortBy === 'title' ? 'Tên' : 'Ngày tạo'}
+              {sortBy !== 'none' && <span className="text-[9px]">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
             </button>
             {sortMenuOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setSortMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 py-1 min-w-[140px] bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl shadow-lg z-20">
+                <div className="absolute right-0 top-full mt-1 py-1 min-w-[150px] bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl shadow-lg z-20">
                   <button onClick={() => { setSortBy('none'); setSortMenuOpen(false); }}
-                    className={`w-full px-3 py-2 text-left text-xs ${sortBy === 'none' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]'}`}>
-                    Không sắp xếp
+                    className={`w-full px-3 py-2 text-left text-xs flex items-center gap-2 ${sortBy === 'none' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]'}`}>
+                    {sortBy === 'none' && '✓'} Không sắp xếp
                   </button>
                   <button onClick={() => { setSortBy('deadline'); setSortMenuOpen(false); }}
-                    className={`w-full px-3 py-2 text-left text-xs ${sortBy === 'deadline' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]'}`}>
-                    Theo hạn chót
+                    className={`w-full px-3 py-2 text-left text-xs flex items-center gap-2 ${sortBy === 'deadline' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]'}`}>
+                    {sortBy === 'deadline' && '✓'} Theo hạn chót
                   </button>
                   <button onClick={() => { setSortBy('title'); setSortMenuOpen(false); }}
-                    className={`w-full px-3 py-2 text-left text-xs ${sortBy === 'title' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]'}`}>
-                    Theo tên
+                    className={`w-full px-3 py-2 text-left text-xs flex items-center gap-2 ${sortBy === 'title' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]'}`}>
+                    {sortBy === 'title' && '✓'} Theo tên
                   </button>
                   <button onClick={() => { setSortBy('created'); setSortMenuOpen(false); }}
-                    className={`w-full px-3 py-2 text-left text-xs ${sortBy === 'created' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]'}`}>
-                    Theo ngày tạo
+                    className={`w-full px-3 py-2 text-left text-xs flex items-center gap-2 ${sortBy === 'created' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]'}`}>
+                    {sortBy === 'created' && '✓'} Theo ngày tạo
                   </button>
                   <hr className="my-1 border-[var(--border-subtle)]" />
-                  <button onClick={() => { setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'); }}
-                    className="w-full px-3 py-2 text-left text-xs text-[var(--text-primary)]">
+                  <button onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                    className="w-full px-3 py-2 text-left text-xs text-[var(--text-primary)] flex items-center gap-2">
                     {sortOrder === 'asc' ? '↑ Tăng dần' : '↓ Giảm dần'}
                   </button>
                 </div>
               </>
             )}
           </div>
-          {/* Search Icon */}
-          <button onClick={() => setSearchExpanded(!searchExpanded)}
-            className={`size-8 rounded-lg flex items-center justify-center flex-shrink-0 ${searchExpanded ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
-            <Search size={14} />
-          </button>
         </div>
-
-        {/* Search Input - expand when clicked */}
-        {searchExpanded && (
-          <div className="mt-1 relative animate-slide-up">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              autoFocus
-              placeholder={`Tìm trong ${activeTab === 'overdue' ? 'Quá hạn' : QUADRANT_LABELS[activeTab as EisenhowerQuadrant]?.label || 'tất cả'}...`}
-              className="w-full bg-[var(--bg-elevated)] rounded-xl pl-9 pr-9 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none border border-[var(--accent-primary)] min-h-[36px]"
-            />
-            <button onClick={() => { setSearchQuery(''); setSearchExpanded(false); }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 size-6 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--bg-surface)]">
-              <X size={12} />
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Task List */}
