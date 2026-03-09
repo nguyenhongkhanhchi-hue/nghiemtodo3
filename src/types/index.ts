@@ -267,9 +267,9 @@ export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
 };
 
 export const QUADRANT_LABELS: Record<EisenhowerQuadrant, { label: string; icon: string; color: string; desc: string }> = {
-  overdue: { label: 'Quá hạn', icon: '🔥', color: '#DC2626', desc: 'Tự động (deadline < hiện tại)' },
-  do_first: { label: 'Làm ngay', icon: '🔴', color: '#F87171', desc: 'Tự động (deadline < 24h)' },
-  schedule: { label: 'Lên lịch', icon: '🔵', color: '#60A5FA', desc: 'Tự động (deadline > 24h)' },
+  overdue: { label: 'Quá hạn', icon: '🔥', color: '#DC2626', desc: 'Tự động (deadline đã qua)' },
+  do_first: { label: 'Hôm nay', icon: '🔴', color: '#F87171', desc: 'Tự động (deadline hôm nay)' },
+  schedule: { label: 'Lên lịch', icon: '🔵', color: '#60A5FA', desc: 'Tự động (deadline từ ngày mai)' },
   delegate: { label: 'Ủy thác', icon: '🟡', color: '#FBBF24', desc: 'Thủ công' },
   eliminate: { label: 'Loại bỏ', icon: '⚪', color: '#5A5A6E', desc: 'Thùng rác' },
 };

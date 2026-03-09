@@ -1,17 +1,265 @@
-// Sound effects using Web Audio API
+// Game-like sound effects using Web Audio API
+// These sounds create a satisfying, interactive experience
+
 let audioCtx: AudioContext | null = null;
+let isMuted = false;
+
+export function setSoundMuted(muted: boolean) {
+  isMuted = muted;
+}
+
+export function getSoundMuted(): boolean {
+  return isMuted;
+}
 
 function getAudioContext(): AudioContext {
   if (!audioCtx) audioCtx = new AudioContext();
   return audioCtx;
 }
 
+// ========== UI INTERACTION SOUNDS ==========
+
+// Button/click sound - short and satisfying
+export function playClickSound() {
+  if (isMuted) return;
+  try {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+    
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    osc.frequency.setValueAtTime(800, now);
+    osc.frequency.exponentialRampToValueAtTime(400, now + 0.05);
+    osc.type = 'sine';
+    
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+    
+    osc.start(now);
+    osc.stop(now + 0.05);
+  } catch (e) {}
+}
+
+// Success/positive feedback - like a coin collect
+export function playSuccessSound() {
+  if (isMuted) return;
+  try {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+    
+    // First note
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.frequency.setValueAtTime(523.25, now);
+    osc1.type = 'sine';
+    gain1.gain.setValueAtTime(0.1, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+    osc1.start(now);
+    osc1.stop(now + 0.1);
+    
+    // Second note (higher)
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.frequency.setValueAtTime(783.99, now + 0.08);
+    osc2.type = 'sine';
+    gain2.gain.setValueAtTime(0.1, now + 0.08);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+    osc2.start(now + 0.08);
+    osc2.stop(now + 0.2);
+  } catch (e) {}
+}
+
+// Tab switch sound
+export function playTabSound() {
+  if (isMuted) return;
+  try {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+    
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    osc.frequency.setValueAtTime(600, now);
+    osc.type = 'triangle';
+    
+    gain.gain.setValueAtTime(0.05, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+    
+    osc.start(now);
+    osc.stop(now + 0.08);
+  } catch (e) {}
+}
+
+// ========== TASK ACTION SOUNDS ==========
+
+// Task created - positive confirmation
+export function playTaskCreatedSound() {
+  if (isMuted) return;
+  try {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+    
+    const notes = [440, 554.37, 659.25];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.setValueAtTime(freq, now + i * 0.06);
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.08, now + i * 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.06 + 0.12);
+      osc.start(now + i * 0.06);
+      osc.stop(now + i * 0.06 + 0.12);
+    });
+  } catch (e) {}
+}
+
+// Task completed - satisfying ding
+export function playTaskCompleteSound() {
+  if (isMuted) return;
+  try {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+    
+    // Main ding
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.frequency.setValueAtTime(659.25, now);
+    osc1.frequency.setValueAtTime(783.99, now + 0.1);
+    osc1.type = 'sine';
+    gain1.gain.setValueAtTime(0.15, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    osc1.start(now);
+    osc1.stop(now + 0.35);
+    
+    // Sparkle
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.frequency.setValueAtTime(1046.50, now + 0.15);
+    osc2.type = 'sine';
+    gain2.gain.setValueAtTime(0.06, now + 0.15);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+    osc2.start(now + 0.15);
+    osc2.stop(now + 0.4);
+  } catch (e) {}
+}
+
+// Task deleted - subtle whoosh
+export function playTaskDeleteSound() {
+  if (isMuted) return;
+  try {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+    
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    osc.frequency.setValueAtTime(300, now);
+    osc.frequency.exponentialRampToValueAtTime(100, now + 0.15);
+    osc.type = 'sine';
+    
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+    
+    osc.start(now);
+    osc.stop(now + 0.15);
+  } catch (e) {}
+}
+
+// ========== TIMER SOUNDS ==========
+
+// Timer start
+export function playTimerStartSound() {
+  if (isMuted) return;
+  try {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+    
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    osc.frequency.setValueAtTime(880, now);
+    osc.type = 'sine';
+    
+    gain.gain.setValueAtTime(0.1, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+    
+    osc.start(now);
+    osc.stop(now + 0.2);
+  } catch (e) {}
+}
+
+// Timer pause
+export function playTimerPauseSound() {
+  if (isMuted) return;
+  try {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+    
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    osc.frequency.setValueAtTime(440, now);
+    osc.type = 'triangle';
+    
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+    
+    osc.start(now);
+    osc.stop(now + 0.1);
+  } catch (e) {}
+}
+
+// Timer tick (for countdown)
+export function playTimerTickSound() {
+  if (isMuted) return;
+  try {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+    
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    osc.frequency.setValueAtTime(1000, now);
+    osc.type = 'sine';
+    
+    gain.gain.setValueAtTime(0.03, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
+    
+    osc.start(now);
+    osc.stop(now + 0.02);
+  } catch (e) {}
+}
+
+// ========== EXISTING SOUNDS (kept for compatibility) ==========
+
 // Bell/chime sound for 30-second intervals
 export function playChime() {
   const ctx = getAudioContext();
   const now = ctx.currentTime;
 
-  // Bell tone 1
   const osc1 = ctx.createOscillator();
   const gain1 = ctx.createGain();
   osc1.connect(gain1);
@@ -23,7 +271,6 @@ export function playChime() {
   osc1.start(now);
   osc1.stop(now + 0.8);
 
-  // Bell tone 2 (harmony)
   const osc2 = ctx.createOscillator();
   const gain2 = ctx.createGain();
   osc2.connect(gain2);
@@ -40,7 +287,7 @@ export function playChime() {
 export function playAchievementSound() {
   const ctx = getAudioContext();
   const now = ctx.currentTime;
-  const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+  const notes = [523.25, 659.25, 783.99, 1046.50];
 
   notes.forEach((freq, i) => {
     const osc = ctx.createOscillator();
@@ -54,24 +301,6 @@ export function playAchievementSound() {
     osc.start(now + i * 0.12);
     osc.stop(now + i * 0.12 + 0.4);
   });
-}
-
-// Task completion ding
-export function playCompletionSound() {
-  const ctx = getAudioContext();
-  const now = ctx.currentTime;
-
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-  osc.frequency.setValueAtTime(659.25, now);
-  osc.frequency.setValueAtTime(783.99, now + 0.1);
-  osc.type = 'sine';
-  gain.gain.setValueAtTime(0.12, now);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-  osc.start(now);
-  osc.stop(now + 0.3);
 }
 
 // Warning/alert sound
@@ -97,7 +326,7 @@ export function playWarningSound() {
 export function playBreakSound() {
   const ctx = getAudioContext();
   const now = ctx.currentTime;
-  const notes = [783.99, 659.25, 523.25]; // G5, E5, C5 descending
+  const notes = [783.99, 659.25, 523.25];
 
   notes.forEach((freq, i) => {
     const osc = ctx.createOscillator();
@@ -113,7 +342,10 @@ export function playBreakSound() {
   });
 }
 
-// Timer encouragement messages based on context
+// Legacy alias
+export const playCompletionSound = playTaskCompleteSound;
+
+// Timer encouragement messages
 const ENCOURAGEMENTS = [
   'Bạn đang làm rất tốt, tiếp tục nhé!',
   'Cố lên, sắp xong rồi!',

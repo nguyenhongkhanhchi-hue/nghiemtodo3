@@ -7,6 +7,7 @@ import { QUADRANT_LABELS, CATEGORY_LABELS } from '@/types';
 import type { Task, EisenhowerQuadrant, TaskStatus, TaskCategory } from '@/types';
 import { isTaskOverdue } from '@/lib/autoQuadrant';
 import { toast } from '@/lib/toast';
+import { playTabSound } from '@/lib/soundEffects';
 import { Play, Pause, Check, Trash2, RotateCcw, ChevronDown, Search, X, AlertCircle, ArrowUpDown } from 'lucide-react';
 
 // Tab types
@@ -52,7 +53,7 @@ export function TaskList() {
       // Overdue: Runtime filter - tất cả việc quá hạn (trừ done và eliminate)
       return tasks.filter(t => isTaskOverdue(t));
     }
-    // Tab LÀM NGAY: gồm cả việc quá hạn (subtab Quá hạn sẽ lọc)
+    // Tab HÔM NAY: gồm cả việc quá hạn (subtab Quá hạn sẽ lọc)
     if (activeTab === 'do_first') {
       return tasks.filter(t => t.quadrant === 'do_first');
     }
@@ -183,7 +184,7 @@ export function TaskList() {
   };
 
   const canStartTimer = (task: Task) => {
-    // ✅ Cho phép bấm giờ: LÀM NGAY HOẶC việc OVERDUE
+    // ✅ Cho phép bấm giờ: HÔM NAY HOẶC việc OVERDUE
     return task.quadrant === 'do_first' || isTaskOverdue(task);
   };
 
@@ -230,7 +231,7 @@ export function TaskList() {
       {/* Main Tabs - Overdue first */}
       <div className="flex gap-0.5 mb-2 p-0.5 bg-[var(--bg-elevated)] rounded-xl overflow-x-auto">
         {/* Overdue Tab - FIRST */}
-        <button onClick={() => setActiveTab('overdue')}
+        <button onClick={() => { setActiveTab('overdue'); playTabSound(); }}
           className={`flex-shrink-0 flex-1 py-2 rounded-lg text-[10px] font-medium min-h-[36px] flex flex-col items-center justify-center gap-0.5 ${activeTab === 'overdue' ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}
           style={activeTab === 'overdue' ? { backgroundColor: 'rgba(248,113,113,0.15)', color: '#F87171' } : {}}>
           <span>🔥</span>
@@ -244,7 +245,7 @@ export function TaskList() {
           const cfg = QUADRANT_LABELS[q];
           const count = tasks.filter(t => t.quadrant === q && t.status !== 'done').length;
           return (
-            <button key={q} onClick={() => setActiveTab(q)}
+            <button key={q} onClick={() => { setActiveTab(q); playTabSound(); }}
               className={`flex-shrink-0 flex-1 py-2 rounded-lg text-[10px] font-medium min-h-[36px] flex flex-col items-center justify-center gap-0.5 ${activeTab === q ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}
               style={activeTab === q ? { backgroundColor: `${cfg.color}15`, color: cfg.color } : {}}>
               <span>{cfg.icon}</span>
@@ -260,7 +261,7 @@ export function TaskList() {
         <div className="flex items-center gap-1">
           {/* Sub-tabs for Do First */}
           {activeTab === 'do_first' && (
-            <div className="flex-1 flex gap-1 overflow-x-auto pb-0.5">
+            <div className="flex-1 flex flex-wrap gap-1 overflow-x-auto pb-0.5">
               {([
                 { key: 'pending' as DoFirstTab, label: 'Chưa làm', icon: '⏳' },
                 { key: 'in_progress' as DoFirstTab, label: 'Đang làm', icon: '▶️' },
@@ -272,9 +273,9 @@ export function TaskList() {
                   ? tabTasks.filter(t => isTaskOverdue(t)).length
                   : tabTasks.filter(t => t.status === tab.key && (tab.key !== 'pending' || !isTaskOverdue(t))).length;
                 return (
-                  <button key={tab.key} onClick={() => setDoFirstTab(tab.key)}
-                    className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-medium min-h-[32px] flex items-center gap-1 ${doFirstTab === tab.key ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
-                    {tab.icon} {tab.label} {count > 0 && <span className="font-mono">({count})</span>}
+                  <button key={tab.key} onClick={() => { setDoFirstTab(tab.key); playTabSound(); }}
+                    className={`flex-shrink-0 px-2 py-1 rounded-lg text-[9px] font-medium h-auto flex items-center gap-0.5 ${doFirstTab === tab.key ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
+                    {tab.icon} {tab.label} {count > 0 && <span className="font-mono text-[8px]">({count})</span>}
                   </button>
                 );
               })}
@@ -283,7 +284,7 @@ export function TaskList() {
 
           {/* Sub-tabs for Schedule */}
           {activeTab === 'schedule' && (
-            <div className="flex-1 flex gap-1 overflow-x-auto pb-0.5">
+            <div className="flex-1 flex flex-wrap gap-1 overflow-x-auto pb-0.5">
               {([
                 { key: 'tomorrow' as ScheduleTab, label: 'Ngày mai', icon: '📅' },
                 { key: '3days' as ScheduleTab, label: '3 ngày tới', icon: '📆' },
@@ -313,9 +314,9 @@ export function TaskList() {
                 }
 
                 return (
-                  <button key={tab.key} onClick={() => setScheduleTab(tab.key)}
-                    className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-medium min-h-[32px] flex items-center gap-1 ${scheduleTab === tab.key ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
-                    {tab.icon} {tab.label} {count > 0 && <span className="font-mono">({count})</span>}
+                  <button key={tab.key} onClick={() => { setScheduleTab(tab.key); playTabSound(); }}
+                    className={`flex-shrink-0 px-2 py-1 rounded-lg text-[9px] font-medium h-auto flex items-center gap-0.5 ${scheduleTab === tab.key ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
+                    {tab.icon} {tab.label} {count > 0 && <span className="font-mono text-[8px]">({count})</span>}
                   </button>
                 );
               })}
@@ -324,18 +325,18 @@ export function TaskList() {
 
           {/* Sub-tabs for Delegate */}
           {activeTab === 'delegate' && (
-            <div className="flex-1 flex gap-1 overflow-x-auto pb-0.5">
-              <button onClick={() => setDelegateTab('all')}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-medium min-h-[32px] flex items-center gap-1 ${delegateTab === 'all' ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
+            <div className="flex-1 flex flex-wrap gap-1 overflow-x-auto pb-0.5">
+              <button onClick={() => { setDelegateTab('all'); playTabSound(); }}
+                className={`flex-shrink-0 px-2 py-1 rounded-lg text-[9px] font-medium h-auto flex items-center gap-0.5 ${delegateTab === 'all' ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
                 👥 Tất cả ({tabTasks.length})
               </button>
-              <button onClick={() => setDelegateTab('overdue')}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-medium min-h-[32px] flex items-center gap-1 ${delegateTab === 'overdue' ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
+              <button onClick={() => { setDelegateTab('overdue'); playTabSound(); }}
+                className={`flex-shrink-0 px-2 py-1 rounded-lg text-[9px] font-medium h-auto flex items-center gap-0.5 ${delegateTab === 'overdue' ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
                 🔥 Quá hạn ({tabTasks.filter(t => isTaskOverdue(t)).length})
               </button>
               {delegatedUsers.map(u => (
-                <button key={u.id} onClick={() => setDelegateTab(u.id)}
-                  className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-medium min-h-[32px] flex items-center gap-1 ${delegateTab === u.id ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
+                <button key={u.id} onClick={() => { setDelegateTab(u.id); playTabSound(); }}
+                  className={`flex-shrink-0 px-2 py-1 rounded-lg text-[9px] font-medium h-auto flex items-center gap-0.5 ${delegateTab === u.id ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
                   👤 {u.name} ({u.count})
                 </button>
               ))}
@@ -346,13 +347,13 @@ export function TaskList() {
           )}
 
           {activeTab === 'eliminate' && (
-            <div className="flex-1 flex gap-1 overflow-x-auto pb-0.5">
-              <button onClick={() => setEliminateTab('all')}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-medium min-h-[32px] flex items-center gap-1 ${eliminateTab === 'all' ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
+            <div className="flex-1 flex flex-wrap gap-1 overflow-x-auto pb-0.5">
+              <button onClick={() => { setEliminateTab('all'); playTabSound(); }}
+                className={`flex-shrink-0 px-2 py-1 rounded-lg text-[9px] font-medium h-auto flex items-center gap-0.5 ${eliminateTab === 'all' ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
                 Tất cả ({tabTasks.length})
               </button>
-              <button onClick={() => setEliminateTab('overdue')}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-medium min-h-[32px] flex items-center gap-1 ${eliminateTab === 'overdue' ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
+              <button onClick={() => { setEliminateTab('overdue'); playTabSound(); }}
+                className={`flex-shrink-0 px-2 py-1 rounded-lg text-[9px] font-medium h-auto flex items-center gap-0.5 ${eliminateTab === 'overdue' ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
                 🔥 Quá hạn ({tabTasks.filter(t => isTaskOverdue(t)).length})
               </button>
             </div>

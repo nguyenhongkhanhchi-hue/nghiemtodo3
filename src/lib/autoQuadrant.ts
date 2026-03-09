@@ -1,7 +1,20 @@
 // Auto-calculate quadrant based on deadline
 import type { EisenhowerQuadrant, Task } from '@/types';
 
-const HOURS_24 = 24 * 60 * 60 * 1000;
+// Get end of today (23:59:59.999)
+function getEndOfToday(): number {
+  const now = new Date();
+  now.setHours(23, 59, 59, 999);
+  return now.getTime();
+}
+
+// Get end of tomorrow (23:59:59.999 tomorrow)
+function getEndOfTomorrow(): number {
+  const now = new Date();
+  now.setDate(now.getDate() + 1);
+  now.setHours(23, 59, 59, 999);
+  return now.getTime();
+}
 
 /**
  * Calculate quadrant based on deadline
@@ -19,18 +32,21 @@ export function calculateQuadrant(
   if (!deadline) return 'do_first'; // Default to do_first if no deadline
 
   const now = Date.now();
-  const timeUntilDeadline = deadline - now;
+  const endOfToday = getEndOfToday();
+  const endOfTomorrow = getEndOfTomorrow();
 
-  // ⚠️ CRITICAL: Overdue tasks stay in their original quadrant (do_first/schedule)
-  // Overdue status is determined by isTaskOverdue() runtime check
-  if (timeUntilDeadline < 0) {
-    // Quá hạn → giữ ở LÀM NGAY để có thể bấm giờ
+  // Overdue = deadline has passed
+  if (deadline < now) {
+    // Quá hạn → giữ ở HÔM NAY để có thể bấm giờ
     return 'do_first';
-  } else if (timeUntilDeadline <= HOURS_24) {
-    // Within 24 hours
+  } else if (deadline <= endOfToday) {
+    // Within today → HÔM NAY
     return 'do_first';
+  } else if (deadline <= endOfTomorrow) {
+    // Tomorrow → LÊN LỊCH (Ngày mai)
+    return 'schedule';
   } else {
-    // More than 24 hours
+    // After tomorrow → LÊN LỊCH
     return 'schedule';
   }
 }

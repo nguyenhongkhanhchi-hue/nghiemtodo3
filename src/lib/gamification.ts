@@ -93,7 +93,7 @@ export const DEFAULT_ACHIEVEMENTS: Achievement[] = [
   {
     id: 'do_first_master',
     title: 'Ưu tiên số 1',
-    description: 'Hoàn thành 10 việc "Làm ngay"',
+    description: 'Hoàn thành 10 việc "Hôm nay"',
     icon: '🎯',
     condition: { type: 'quadrant_master', quadrant: 'do_first', count: 10 },
     xpReward: 80,

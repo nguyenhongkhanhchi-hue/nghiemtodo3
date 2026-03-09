@@ -12,6 +12,13 @@ import { getNowInTimezone } from '@/lib/notifications';
 import { calculateQuadrant, isTaskOverdue } from '@/lib/autoQuadrant';
 import { toast } from '@/lib/toast';
 import {
+  playTaskCreatedSound,
+  playTaskCompleteSound,
+  playTaskDeleteSound,
+  playTimerStartSound,
+  playTimerPauseSound,
+} from '@/lib/soundEffects';
+import {
   loadTasksFromDB, saveTasksToDB,
   loadTemplatesFromDB, saveTemplatesToDB,
   loadTopicsFromDB, saveTopicsToDB,
@@ -132,6 +139,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     saveToStorage(getUserKey('nw_tasks', userId), updated);
     set({ tasks: updated });
     if (userId && userId !== 'admin') saveTasksToDB(userId, updated);
+    playTaskCreatedSound();
     return id;
   },
 
@@ -160,6 +168,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     saveToStorage(getUserKey('nw_tasks', userId), updated);
     set({ tasks: updated });
     if (userId && userId !== 'admin') saveTasksToDB(userId, updated);
+    playTaskDeleteSound();
   },
 
   completeTask: (id) => {
@@ -181,6 +190,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     });
     if (userId && userId !== 'admin') saveTasksToDB(userId, updated);
     useGamificationStore.getState().onTaskCompleted(task.quadrant, task.duration || 0, tz, xpEarned);
+    playTaskCompleteSound();
   },
 
   restoreTask: (id) => {
@@ -223,7 +233,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     if (!task) return;
     const taskIsOverdue = isTaskOverdue(task);
     if (task.quadrant !== 'do_first' && !taskIsOverdue) {
-      toast.warning('⚠️ Chỉ cho phép bấm giờ cho việc LÀM NGAY hoặc QUÁ HẠN');
+      toast.warning('⚠️ Chỉ cho phép bấm giờ cho việc HÔM NAY hoặc QUÁ HẠN');
       return;
     }
     
@@ -239,6 +249,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     const newTimer = { taskId, isRunning: true, isPaused: false, elapsed: 0, startTime: Date.now(), pausedAt: null, totalPausedDuration: 0 };
     saveToStorage(getUserKey('nw_timer', get()._userId), newTimer);
     set({ tasks: updated, timer: newTimer });
+    playTimerStartSound();
   },
   pauseTimer: () => {
     const t = get().timer;
@@ -254,6 +265,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       set({ timer: newTimer, tasks: updatedTasks });
       saveToStorage(getUserKey('nw_timer', userId), newTimer);
       if (userId && userId !== 'admin') saveTasksToDB(userId, updatedTasks);
+      playTimerPauseSound();
     }
   },
   resumeTimer: () => {

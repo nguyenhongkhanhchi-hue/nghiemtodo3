@@ -7,7 +7,7 @@ import { TrendingUp, Clock, Award, Target, Flame, Share2, Copy, Check, ChevronLe
 import type { EisenhowerQuadrant } from '@/types';
 import { QUADRANT_LABELS } from '@/types';
 
-const QUADRANT_NAMES: Record<EisenhowerQuadrant, string> = { do_first: 'Làm ngay', schedule: 'Lên lịch', delegate: 'Ủy thác', eliminate: 'Loại bỏ' };
+const QUADRANT_NAMES: Record<EisenhowerQuadrant, string> = { do_first: 'Hôm nay', schedule: 'Lên lịch', delegate: 'Ủy thác', eliminate: 'Loại bỏ' };
 const PIE_COLORS = ['#F87171', '#60A5FA', '#FBBF24', '#5A5A6E'];
 const HEATMAP_COLORS = ['var(--bg-surface)', 'rgba(0,229,204,0.2)', 'rgba(0,229,204,0.4)', 'rgba(0,229,204,0.6)', 'rgba(0,229,204,0.9)'];
 

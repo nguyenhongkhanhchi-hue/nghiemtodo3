@@ -48,7 +48,7 @@ function getDailyQuests(completedToday: number, streakDays: number): DailyQuest[
   return [
     { id: 'q1', title: 'Hoàn thành 3 task hôm nay', icon: '✅', xpReward: 30, progress: Math.min(3, completedToday), target: 3, completed: completedToday >= 3 },
     { id: 'q2', title: 'Duy trì streak liên tiếp', icon: '🔥', xpReward: 20, progress: Math.min(1, streakDays > 0 ? 1 : 0), target: 1, completed: streakDays > 0 },
-    { id: 'q3', title: 'Làm ngay 1 task "Làm ngay"', icon: '🎯', xpReward: 15, progress: Math.min(1, completedToday > 0 ? 1 : 0), target: 1, completed: completedToday > 0 },
+    { id: 'q3', title: 'Hoàn thành 1 task "Hôm nay"', icon: '🎯', xpReward: 15, progress: Math.min(1, completedToday > 0 ? 1 : 0), target: 1, completed: completedToday > 0 },
   ];
 }
 
