@@ -3,7 +3,7 @@ import { useTaskStore, useGamificationStore, useSettingsStore } from '@/stores';
 import { getNowInTimezone } from '@/lib/notifications';
 import { generateDailySummary } from '@/lib/dataUtils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, Clock, Award, Target, Flame, Share2, Copy, Check, ChevronLeft, ChevronRight, Calendar, DollarSign, Trophy } from 'lucide-react';
+import { TrendingUp, Clock, Award, Target, Flame, Share2, Copy, Check, ChevronLeft, ChevronRight, Calendar, Trophy } from 'lucide-react';
 import type { EisenhowerQuadrant } from '@/types';
 import { QUADRANT_LABELS } from '@/types';
 
@@ -148,44 +148,6 @@ function WeeklyReview() {
   );
 }
 
-// Finance Summary
-function FinanceSummary() {
-  const tasks = useTaskStore(s => s.tasks);
-  const timezone = useSettingsStore(s => s.timezone);
-  const [copied, setCopied] = useState(false);
-  const now = getNowInTimezone(timezone);
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).getTime();
-
-  const todayIncome = tasks.filter(t => t.status === 'done' && t.finance?.type === 'income' && t.completedAt && t.completedAt >= todayStart).reduce((s, t) => s + (t.finance?.amount || 0), 0);
-  const todayExpense = tasks.filter(t => t.status === 'done' && t.finance?.type === 'expense' && t.completedAt && t.completedAt >= todayStart).reduce((s, t) => s + (t.finance?.amount || 0), 0);
-  const monthIncome = tasks.filter(t => t.status === 'done' && t.finance?.type === 'income' && t.completedAt && t.completedAt >= monthStart && t.completedAt <= monthEnd).reduce((s, t) => s + (t.finance?.amount || 0), 0);
-  const monthExpense = tasks.filter(t => t.status === 'done' && t.finance?.type === 'expense' && t.completedAt && t.completedAt >= monthStart && t.completedAt <= monthEnd).reduce((s, t) => s + (t.finance?.amount || 0), 0);
-
-  return (
-    <div className="bg-[var(--bg-elevated)] rounded-xl p-3 border border-[var(--border-subtle)] mb-3">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-xs font-semibold text-[var(--text-primary)] flex items-center gap-1"><DollarSign size={12} /> Thu Chi</h2>
-      </div>
-      <div className="grid grid-cols-2 gap-2 mb-2">
-        <div className="p-2 rounded-lg bg-[var(--bg-surface)]">
-          <p className="text-[10px] text-[var(--text-muted)] mb-1">Hôm nay</p>
-          <p className="text-sm font-bold text-[var(--success)] font-mono">+{todayIncome.toLocaleString('vi-VN')}đ</p>
-          <p className="text-sm font-bold text-[var(--error)] font-mono">-{todayExpense.toLocaleString('vi-VN')}đ</p>
-          <p className="text-xs font-bold text-[var(--text-primary)] font-mono mt-1">={(todayIncome - todayExpense).toLocaleString('vi-VN')}đ</p>
-        </div>
-        <div className="p-2 rounded-lg bg-[var(--bg-surface)]">
-          <p className="text-[10px] text-[var(--text-muted)] mb-1">Tháng này</p>
-          <p className="text-sm font-bold text-[var(--success)] font-mono">+{monthIncome.toLocaleString('vi-VN')}đ</p>
-          <p className="text-sm font-bold text-[var(--error)] font-mono">-{monthExpense.toLocaleString('vi-VN')}đ</p>
-          <p className="text-xs font-bold text-[var(--text-primary)] font-mono mt-1">={(monthIncome - monthExpense).toLocaleString('vi-VN')}đ</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // Achievements Summary
 function AchievementsSummary() {
   const gamState = useGamificationStore(s => s.state);
@@ -235,7 +197,6 @@ export default function StatsPage() {
     <div className="flex flex-col h-full px-4 pt-3 pb-24 overflow-y-auto">
       <h1 className="text-lg font-bold text-[var(--text-primary)] mb-3">Thống kê</h1>
       <DailySummary />
-      <FinanceSummary />
       <AchievementsSummary />
       <CalendarHeatmap />
       <WeeklyReview />
