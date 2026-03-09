@@ -223,3 +223,35 @@ body.portrait .landscape-visible { display: none !important; }
 [contenteditable] img { max-width: 100%; border-radius: 8px; margin: 4px 0; }
 [contenteditable] iframe { max-width: 100%; border-radius: 8px; }
 [contenteditable] video { max-width: 100%; border-radius: 8px; }
+
+/* Screen brightness control */
+:root {
+  --screen-brightness: 100%;
+}
+
+html {
+  filter: brightness(var(--screen-brightness));
+}
+
+/* Lock touch - disable all interactions */
+html.lock-touch {
+  pointer-events: none;
+}
+
+html.lock-touch * {
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Allow ScreenControls to work when touch is locked */
+html.lock-touch .fixed.bottom-20 {
+  pointer-events: auto;
+}
+
+html.lock-touch .fixed.bottom-20 * {
+  pointer-events: auto;
+  user-select: none;
+}

@@ -682,6 +682,8 @@ interface SettingsStore {
   fontScale: number;
   tickSoundEnabled: boolean;
   voiceEnabled: boolean;
+  screenBrightness: number;
+  lockTouch: boolean;
   currentPage: PageType;
   timezone: string;
   notificationSettings: NotificationSettings;
@@ -690,6 +692,8 @@ interface SettingsStore {
   setFontScale: (scale: number) => void;
   setTickSound: (enabled: boolean) => void;
   setVoiceEnabled: (enabled: boolean) => void;
+  setScreenBrightness: (brightness: number) => void;
+  setLockTouch: (locked: boolean) => void;
   setCurrentPage: (page: PageType) => void;
   setTimezone: (tz: string) => void;
   setNotificationSettings: (settings: Partial<NotificationSettings>) => void;
@@ -701,6 +705,8 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   fontScale: loadFromStorage<number>('nw_fontscale', 1),
   tickSoundEnabled: loadFromStorage<boolean>('nw_tick', true),
   voiceEnabled: loadFromStorage<boolean>('nw_voice', true),
+  screenBrightness: loadFromStorage<number>('nw_brightness', 100),
+  lockTouch: loadFromStorage<boolean>('nw_locktouch', false),
   timezone: loadFromStorage<string>('nw_timezone', 'Asia/Ho_Chi_Minh'),
   notificationSettings: loadFromStorage<NotificationSettings>('nw_notifications', { enabled: true, beforeDeadline: 15, dailyReminder: false, dailyReminderTime: '08:00' }),
   voiceSettings: loadFromStorage<VoiceSettings>('nw_voicesettings', DEFAULT_VOICE_SETTINGS),
@@ -714,6 +720,17 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   },
   setTickSound: (e) => { saveToStorage('nw_tick', e); set({ tickSoundEnabled: e }); },
   setVoiceEnabled: (e) => { saveToStorage('nw_voice', e); set({ voiceEnabled: e }); },
+  setScreenBrightness: (brightness) => {
+    const safe = Math.max(10, Math.min(100, brightness));
+    saveToStorage('nw_brightness', safe);
+    document.documentElement.style.setProperty('--screen-brightness', `${safe}%`);
+    set({ screenBrightness: safe });
+  },
+  setLockTouch: (locked) => {
+    saveToStorage('nw_locktouch', locked);
+    document.documentElement.classList.toggle('lock-touch', locked);
+    set({ lockTouch: locked });
+  },
   setCurrentPage: (page) => set({ currentPage: page }),
   setTimezone: (tz) => { saveToStorage('nw_timezone', tz); set({ timezone: tz }); },
   setNotificationSettings: (partial) => {

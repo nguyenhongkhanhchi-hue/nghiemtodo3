@@ -101,14 +101,23 @@ export function TaskTimer() {
         </div>
         <div className="flex items-center gap-1">
           <button 
-            onClick={() => setTickSound(!tickSoundEnabled)}
-            title={tickSoundEnabled ? 'Tắt âm thanh tik tak' : 'Bật âm thanh tik tak'}
+            onClick={() => {
+              const allMuted = !tickSoundEnabled && !voiceEnabled;
+              if (allMuted) {
+                setTickSound(true);
+                setVoiceEnabled(true);
+              } else {
+                setTickSound(false);
+                setVoiceEnabled(false);
+              }
+            }}
+            title={tickSoundEnabled || voiceEnabled ? 'Tắt toàn bộ âm thanh' : 'Bật âm thanh'}
             className={`size-9 rounded-xl flex items-center justify-center transition-colors ${
-              tickSoundEnabled 
+              tickSoundEnabled || voiceEnabled
                 ? 'bg-[rgba(59,130,246,0.2)] text-blue-500' 
                 : 'bg-[rgba(107,114,128,0.2)] text-gray-500'
             }`}>
-            {tickSoundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            {tickSoundEnabled || voiceEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
           </button>
           <button 
             onClick={() => setVoiceEnabled(!voiceEnabled)}

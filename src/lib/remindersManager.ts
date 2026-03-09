@@ -60,16 +60,41 @@ export async function playReminderAlert(taskTitle: string, repeatCount: number):
   }
 }
 
-// Phát thông báo đẩy cho reminder
+// Phát thông báo đẩy cho reminder (hoạt động cả khi app ở nền)
 export function sendReminderNotification(taskTitle: string, repeatCount: number, taskId: string): void {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   
   try {
-    new Notification(`🔔 Nhắc nhở: ${taskTitle}`, {
-      body: `Lần ${repeatCount} nhắc nhở`,
-      tag: `reminder-${taskId}`,
-      requireInteraction: true,
-    } as NotificationOptions & { vibrate?: number[] });
+    // Thử gửi qua Service Worker nếu có (hoạt động tốt hơn khi app ở nền)
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: 'SHOW_REMINDER',
+        title: `🔔 Nhắc nhở: ${taskTitle}`,
+        body: `Lần ${repeatCount} nhắc nhở`,
+        tag: `reminder-${taskId}`,
+        requireInteraction: true,
+      });
+    } else {
+      // Fallback: Notification API trực tiếp
+      const registration = navigator.serviceWorker?.controller;
+      if (registration) {
+        // Nếu có service worker controller
+        (registration as any).postMessage({
+          type: 'SHOW_REMINDER',
+          title: `🔔 Nhắc nhở: ${taskTitle}`,
+          body: `Lần ${repeatCount} nhắc nhở`,
+          tag: `reminder-${taskId}`,
+          requireInteraction: true,
+        });
+      } else {
+        // Fallback cuối cùng: Notification API
+        new Notification(`🔔 Nhắc nhở: ${taskTitle}`, {
+          body: `Lần ${repeatCount} nhắc nhở`,
+          tag: `reminder-${taskId}`,
+          requireInteraction: true,
+        } as NotificationOptions & { vibrate?: number[] });
+      }
+    }
   } catch (err) {
     console.warn('Error sending reminder notification:', err);
   }

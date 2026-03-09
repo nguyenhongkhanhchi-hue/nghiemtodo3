@@ -3,8 +3,10 @@ import { useSettingsStore, useAuthStore, useTaskStore, useChatStore, useGamifica
 import { supabase } from '@/lib/supabase';
 import { checkDeadlineNotifications } from '@/lib/notifications';
 import { getTriggeredReminders } from '@/lib/remindersManager';
+import { requestBackgroundPermissions, requestPersistentWakeLock } from '@/lib/backgroundPermissions';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { ToastContainer } from '@/components/layout/ToastContainer';
+import { ScreenControls } from '@/components/layout/ScreenControls';
 import { TaskTimer } from '@/components/features/TaskTimer';
 import { ReminderAlert } from '@/components/features/ReminderAlert';
 import { LucyChatFAB } from '@/pages/AIPage';
@@ -47,6 +49,14 @@ export default function App() {
 
   // Font scale
   useEffect(() => { document.documentElement.style.setProperty('--font-scale', String(fontScale)); }, [fontScale]);
+
+  // Screen brightness
+  useEffect(() => {
+    const screenBrightness = useSettingsStore.getState().screenBrightness;
+    const lockTouch = useSettingsStore.getState().lockTouch;
+    document.documentElement.style.setProperty('--screen-brightness', `${screenBrightness}%`);
+    document.documentElement.classList.toggle('lock-touch', lockTouch);
+  }, []);
 
   // Detect orientation
   useEffect(() => {
@@ -99,6 +109,26 @@ export default function App() {
     });
     return () => { mounted = false; subscription.unsubscribe(); };
   }, []);
+
+  // Request background permissions when user logs in
+  useEffect(() => {
+    if (!user) return;
+    
+    (async () => {
+      const perms = await requestBackgroundPermissions();
+      const hasWakeLock = await requestPersistentWakeLock();
+      
+      console.log('Background Permissions:', {
+        notification: perms.notification,
+        badging: perms.badging,
+        wakeLock: hasWakeLock,
+      });
+      
+      if (!perms.notification) {
+        console.warn('⚠️ Notification permission not granted - reminders may not work');
+      }
+    })();
+  }, [user?.id]);
 
   // Init stores
   useEffect(() => {
@@ -200,6 +230,7 @@ export default function App() {
           <LucyChatFAB />
         </div>
       )}
+      <ScreenControls />
     </div>
   );
 }
