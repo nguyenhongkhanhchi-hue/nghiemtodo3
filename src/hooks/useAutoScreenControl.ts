@@ -1,12 +1,14 @@
 import { useEffect, useRef } from 'react';
 import { useSettingsStore } from '@/stores';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const INACTIVITY_DELAY = 5000; // 5 seconds
 const REDUCED_BRIGHTNESS = 5; // 5% brightness when dimmed
 const NORMAL_BRIGHTNESS = 100;
-const HOLD_DURATION = 3000; // 3 seconds to unlock
+const HOLD_DURATION = 2000; // 2 seconds to unlock
 
 export function useAutoScreenControl() {
+  const isMobile = useIsMobile();
   const inactivityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const holdTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const screenBrightness = useSettingsStore(s => s.screenBrightness);
@@ -15,7 +17,14 @@ export function useAutoScreenControl() {
   const setLockTouch = useSettingsStore(s => s.setLockTouch);
   const isInactiveRef = useRef(false);
 
-  const clearHoldTimer = () => {
+  // Only apply auto screen control on mobile devices
+  if (!isMobile) {
+    return;
+  }
+
+  const clearTapTimer = () => {
+    if (tapResetTimeoutRef.current) {
+      clearTiHoldTimer = () => {
     if (holdTimeoutRef.current) {
       clearTimeout(holdTimeoutRef.current);
       holdTimeoutRef.current = null;
@@ -23,9 +32,7 @@ export function useAutoScreenControl() {
   };
 
   const restoreScreen = () => {
-    clearHoldTimer();
-    setScreenBrightness(NORMAL_BRIGHTNESS);
-    setLockTouch(false);
+    clearHoldTimer()
     isInactiveRef.current = false;
   };
 
@@ -45,27 +52,30 @@ export function useAutoScreenControl() {
       setScreenBrightness(REDUCED_BRIGHTNESS);
       setLockTouch(true);
       isInactiveRef.current = true;
-    }, INACTIVITY_DELAY);
-  };
+      tapCountRef.current = 0;
+      lastTapTimeRef.current = 0;
+    
+  const handleTap = () => {
+    // If screen is not dimmed, just reset inactivity timer
+    if (!isInacouchStart = () => {
+    // If screen is not dimmed, just reset inactivity timer
+    if (!isInactiveRef.current) {
+      resetInactivityTimer();
+      return;
+    }
 
-  const handleTouchStart = () => {
-    // If inactive (screen dimmed), require 3-second hold to unlock
-    if (isInactiveRef.current && !holdTimeoutRef.current) {
+    // Screen is dimmed - start hold timer
+    if (!holdTimeoutRef.current) {
       holdTimeoutRef.current = setTimeout(() => {
         restoreScreen();
       }, HOLD_DURATION);
-    } else if (!isInactiveRef.current) {
-      // Normal activity - reset inactivity timer
-      resetInactivityTimer();
     }
   };
 
   const handleTouchEnd = () => {
-    // If hold is in progress and screen is dimmed, don't clear - let user try again
+    // If hold is in progress and screen is dimmed, cancel it
     if (holdTimeoutRef.current && isInactiveRef.current) {
-      clearHoldTimer();
-    }
-  };
+      clearHoldTimer(
 
   const handleOtherActivity = () => {
     // Non-touch activity (mouse, keyboard) - only work if not dimmed
@@ -78,7 +88,23 @@ export function useAutoScreenControl() {
     // Start initial timer
     resetInactivityTimer();
 
-    // Add listeners for touch (special handling for hold detection)
+    // Add listeners for touch (tap detection)
+    window.addEventListener('touchend', handleTap, true);
+
+    // Mouse/keyboard only reset timer if not dimmed
+    window.addEventListener('mousedown', handleOtherActivity, true);
+    window.addEventListener('click', handleOtherActivity, true);
+    window.addEventListener('keydown', handleOtherActivity, true);
+
+    return () => {
+      // Cleanup
+      if (inactivityTimeoutRef.current) {
+        clearTimeout(inactivityTimeoutRef.current);
+      }
+      clearTapTimer();
+
+      window.removeEventListener('touchend', handleTap, true);
+      window.removeEventListenerhold detection)
     window.addEventListener('touchstart', handleTouchStart, true);
     window.addEventListener('touchend', handleTouchEnd, true);
 
@@ -95,10 +121,4 @@ export function useAutoScreenControl() {
       clearHoldTimer();
 
       window.removeEventListener('touchstart', handleTouchStart, true);
-      window.removeEventListener('touchend', handleTouchEnd, true);
-      window.removeEventListener('mousedown', handleOtherActivity, true);
-      window.removeEventListener('click', handleOtherActivity, true);
-      window.removeEventListener('keydown', handleOtherActivity, true);
-    };
-  }, [setScreenBrightness, setLockTouch]);
-}
+      window.removeEventListener('touchend', handleTouchEnd
