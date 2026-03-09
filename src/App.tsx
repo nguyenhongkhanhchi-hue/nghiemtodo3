@@ -4,9 +4,9 @@ import { supabase } from '@/lib/supabase';
 import { checkDeadlineNotifications } from '@/lib/notifications';
 import { getTriggeredReminders } from '@/lib/remindersManager';
 import { requestBackgroundPermissions, requestPersistentWakeLock } from '@/lib/backgroundPermissions';
+import { useAutoScreenControl } from '@/hooks/useAutoScreenControl';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { ToastContainer } from '@/components/layout/ToastContainer';
-import { ScreenControls } from '@/components/layout/ScreenControls';
 import { TaskTimer } from '@/components/features/TaskTimer';
 import { ReminderAlert } from '@/components/features/ReminderAlert';
 import { LucyChatFAB } from '@/pages/AIPage';
@@ -46,6 +46,9 @@ export default function App() {
   const [showTemplateEditor, setShowTemplateEditor] = useState(false);
   const [templateMode, setTemplateMode] = useState<'single' | 'group'>('single');
   const [triggeredReminder, setTriggeredReminder] = useState<Reminder | null>(null);
+
+  // Auto screen control (dim + lock after 5s inactivity)
+  useAutoScreenControl();
 
   // Font scale
   useEffect(() => { document.documentElement.style.setProperty('--font-scale', String(fontScale)); }, [fontScale]);
@@ -230,7 +233,6 @@ export default function App() {
           <LucyChatFAB />
         </div>
       )}
-      <ScreenControls />
     </div>
   );
 }
