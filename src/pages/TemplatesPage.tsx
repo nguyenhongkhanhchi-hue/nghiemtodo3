@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { useTemplateStore, useTopicStore, useTaskStore } from '@/stores';
+import { useTemplateStore, useTopicStore, useTaskStore, useSettingsStore } from '@/stores';
 import { convertYoutubeUrl, isYoutubeUrl } from '@/lib/youtubeUtils';
 import {
   Plus, Trash2, Edit3, X, Save, Youtube, DollarSign, ArrowRight,
@@ -77,6 +77,7 @@ function TemplateInfoModal({ template, onClose, onEdit }: { template: TaskTempla
 function AddToTodoDialog({ template, onClose }: { template: TaskTemplate; onClose: () => void }) {
   const addSingleTaskToTodo = useTemplateStore(s => s.addSingleTaskToTodo);
   const addGroupTasksToTodo = useTemplateStore(s => s.addGroupTasksToTodo);
+  const financeCategories = useSettingsStore(s => s.financeCategories);
   const now = new Date();
   const nowDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const nowTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -87,7 +88,14 @@ function AddToTodoDialog({ template, onClose }: { template: TaskTemplate; onClos
   const [notes, setNotes] = useState('');
   const [showDeadline, setShowDeadline] = useState(false);
   const [showRecurring, setShowRecurring] = useState(false);
+  const [showFinance, setShowFinance] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
+  
+  // New finance format states - now default
+  const [useNewFinanceFormat, setUseNewFinanceFormat] = useState(true);
+  const [financeItems, setFinanceItems] = useState<TaskFinance[]>([]);
+  const [finType, setFinType] = useState<'income' | 'expense'>('expense');
+  const [finAmount, setFinAmount] = useState(0);
 
   const handleAdd = () => {
     if (template.isGroup) {
@@ -97,7 +105,23 @@ function AddToTodoDialog({ template, onClose }: { template: TaskTemplate; onClos
       if (showDeadline && deadlineDate) deadline = new Date(`${deadlineDate}T${deadlineTime || '23:59'}:00`).getTime();
       if (quadrant === 'do_first' && !deadline) { const d = new Date(); d.setHours(23, 59, 0, 0); deadline = d.getTime(); }
       if (quadrant === 'schedule' && !deadline) { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(23, 59, 0, 0); deadline = d.getTime(); }
-      addSingleTaskToTodo(template.id, quadrant, deadline, showDeadline ? deadlineDate : undefined, showDeadline ? deadlineTime : undefined, undefined, { type: showRecurring ? recurringType : 'none' }, notes || undefined);
+      
+      // Handle finance based on format
+      let finance: TaskFinance | undefined;
+      if (useNewFinanceFormat) {
+        const validItems = financeItems.filter(f => f.amount > 0);
+        if (validItems.length > 0) finance = validItems[0];
+      } else if (showFinance && finAmount > 0) {
+        finance = {
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+          type: finType,
+          amount: finAmount,
+          category: financeCategories[0]?.id || 'other',
+          note: ''
+        };
+      }
+      
+      addSingleTaskToTodo(template.id, quadrant, deadline, showDeadline ? deadlineDate : undefined, showDeadline ? deadlineTime : undefined, finance, { type: showRecurring ? recurringType : 'none' }, notes || undefined);
     }
     onClose();
   };
@@ -105,6 +129,7 @@ function AddToTodoDialog({ template, onClose }: { template: TaskTemplate; onClos
   const toggles = [
     { key: 'deadline', label: '⏰ Hạn chót', active: showDeadline, toggle: () => setShowDeadline(!showDeadline) },
     { key: 'recurring', label: '🔁 Lặp lại', active: showRecurring, toggle: () => setShowRecurring(!showRecurring) },
+    { key: 'finance', label: '💰 Thu/Chi', active: showFinance, toggle: () => setShowFinance(!showFinance) },
     { key: 'notes', label: '📝 Ghi chú', active: showNotes, toggle: () => setShowNotes(!showNotes) },
   ];
 
@@ -129,7 +154,7 @@ function AddToTodoDialog({ template, onClose }: { template: TaskTemplate; onClos
               );
             })}
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {toggles.map(opt => (
               <button key={opt.key} onClick={opt.toggle}
                 className={`flex items-center gap-1.5 px-2 py-2 rounded-lg text-[10px] font-medium min-h-[34px] border ${opt.active ? 'border-[var(--border-accent)] bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-muted)]'}`}>
@@ -156,6 +181,97 @@ function AddToTodoDialog({ template, onClose }: { template: TaskTemplate; onClos
                   {r === 'none' ? 'Không' : r === 'daily' ? 'Hàng ngày' : r === 'weekdays' ? 'T2-T6' : 'Hàng tuần'}
                 </button>
               ))}
+            </div>
+          )}
+          {showFinance && (
+            <div className="space-y-2">
+              {/* New format: multiple finance items with categories - now default */}
+              <div className="space-y-2">
+                  {financeItems.map((item, idx) => (
+                    <div key={idx} className="bg-[var(--bg-surface)] p-2 rounded-lg border border-[var(--border-subtle)] space-y-2">
+                      <div className="flex gap-2">
+                        <select
+                          value={item.type}
+                          onChange={e => {
+                            const newItems = [...financeItems];
+                            newItems[idx] = { ...newItems[idx], type: e.target.value as 'income' | 'expense' };
+                            setFinanceItems(newItems);
+                          }}
+                          className={`rounded-lg px-2 py-1.5 text-xs font-bold outline-none border border-[var(--border-subtle)] min-h-[32px] ${
+                            item.type === 'income' ? 'bg-[var(--success)] text-white' : 'bg-[var(--error)] text-white'
+                          }`}
+                        >
+                          <option value="income">Thu</option>
+                          <option value="expense">Chi</option>
+                        </select>
+                        <input
+                          type="number"
+                          value={item.amount || ''}
+                          onChange={e => {
+                            const newItems = [...financeItems];
+                            newItems[idx] = { ...newItems[idx], amount: Math.max(0, parseInt(e.target.value) || 0) };
+                            setFinanceItems(newItems);
+                          }}
+                          placeholder="Số tiền"
+                          className="flex-1 bg-[var(--bg-elevated)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[32px] font-mono"
+                          inputMode="numeric"
+                        />
+                        <button onClick={() => {
+                          const newItems = [...financeItems];
+                          newItems.splice(idx, 1);
+                          setFinanceItems(newItems);
+                        }} className="size-8 rounded-lg bg-[var(--bg-surface)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--error)]">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <select
+                          value={item.category}
+                          onChange={e => {
+                            const newItems = [...financeItems];
+                            newItems[idx] = { ...newItems[idx], category: e.target.value };
+                            setFinanceItems(newItems);
+                          }}
+                          className="w-1/3 bg-[var(--bg-surface)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[32px]"
+                        >
+                          {financeCategories.map(fc => (
+                            <option key={fc.id} value={fc.id}>{fc.icon} {fc.name}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={item.note || ''}
+                          onChange={e => {
+                            const newItems = [...financeItems];
+                            newItems[idx] = { ...newItems[idx], note: e.target.value };
+                            setFinanceItems(newItems);
+                          }}
+                          placeholder="Ghi chú chi tiêu..."
+                          className="flex-1 bg-[var(--bg-surface)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[32px]"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  
+                  <button 
+                    onClick={() => {
+                      setFinanceItems([
+                        ...financeItems,
+                        {
+                          id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+                          type: 'expense',
+                          amount: 0,
+                          category: financeCategories[0]?.id || 'other',
+                          note: ''
+                        }
+                      ]);
+                    }}
+                    className="w-full py-2 rounded-lg border border-dashed border-[var(--border-subtle)] text-xs text-[var(--text-muted)] flex items-center justify-center gap-1 hover:bg-[var(--bg-elevated)]"
+                  >
+                    <Plus size={14} /> Thêm khoản thu/chi
+                  </button>
+                </div>
             </div>
           )}
           {showNotes && (

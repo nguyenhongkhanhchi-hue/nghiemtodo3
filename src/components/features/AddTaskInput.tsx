@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useTaskStore } from '@/stores';
+import { useTaskStore, useSettingsStore } from '@/stores';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
-import { X, Mic, MicOff, Check, ChevronDown } from 'lucide-react';
-import type { RecurringConfig, RecurringType } from '@/types';
+import { X, Mic, MicOff, Check, ChevronDown, Plus, Trash2 } from 'lucide-react';
+import type { RecurringConfig, RecurringType, TaskFinance } from '@/types';
 import { toast } from '@/lib/toast';
 
 function formatMoneyDisplay(value: number): string {
@@ -80,6 +80,11 @@ export function AddTaskSheet({ onClose }: { onClose: () => void }) {
   const [, setTick] = useState(0);
   useEffect(() => { const t = setInterval(() => setTick(d => d + 1), 1000); return () => clearInterval(t); }, []);
   const [finType, setFinType] = useState<'income' | 'expense'>('expense');
+  
+  // New finance format - now default when Thu/Chi is selected
+  const [useNewFinanceFormat, setUseNewFinanceFormat] = useState(true);
+  const [financeItems, setFinanceItems] = useState<TaskFinance[]>([]);
+  const financeCategories = useSettingsStore(s => s.financeCategories);
 
   const addTask = useTaskStore(s => s.addTask);
   const { isListening, transcript, startListening, stopListening, isSupported } = useSpeechRecognition();
@@ -101,9 +106,37 @@ export function AddTaskSheet({ onClose }: { onClose: () => void }) {
     const next = !showFinance;
     setShowFinance(next);
     setExpandedFinance(next);
-    if (next) setFinAmountDisplay('');
+    if (next && financeItems.length === 0) {
+      addFinanceItem();
+    }
   };
   const toggleNotes = () => { setShowNotes(!showNotes); setExpandedNotes(!showNotes); };
+  
+  // Finance item management for new format
+  const addFinanceItem = () => {
+    setFinanceItems([
+      ...financeItems,
+      {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+        type: 'expense',
+        amount: 0,
+        category: financeCategories[0]?.id || 'other',
+        note: ''
+      }
+    ]);
+  };
+  
+  const removeFinanceItem = (index: number) => {
+    const newItems = [...financeItems];
+    newItems.splice(index, 1);
+    setFinanceItems(newItems);
+  };
+  
+  const updateFinanceItem = (index: number, updates: Partial<TaskFinance>) => {
+    const newItems = [...financeItems];
+    newItems[index] = { ...newItems[index], ...updates };
+    setFinanceItems(newItems);
+  };
 
   const handleSubmit = () => {
     const trimmed = value.trim();
@@ -118,8 +151,26 @@ export function AddTaskSheet({ onClose }: { onClose: () => void }) {
     }
     
     const recurring: RecurringConfig = { type: showRecurring ? recurringType : 'none' };
-    const amount = parseMoneyInput(finAmountDisplay);
-    const finance = showFinance && amount > 0 ? { type: finType, amount } : undefined;
+    
+    // Handle finance based on format
+    let finance: TaskFinance[] | undefined;
+    if (useNewFinanceFormat) {
+      // New format: array of finance items
+      const validItems = financeItems.filter(f => f.amount > 0);
+      if (validItems.length > 0) finance = validItems;
+    } else {
+      // Old format: single item
+      const amount = parseMoneyInput(finAmountDisplay);
+      if (showFinance && amount > 0) {
+        finance = [{
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+          type: finType,
+          amount,
+          category: financeCategories[0]?.id || 'other',
+          note: ''
+        }];
+      }
+    }
     
     const taskId = addTask(trimmed, undefined, deadline, recurring, showDeadline ? deadlineDate : undefined, showDeadline ? deadlineTime : undefined, finance, undefined, false, {
       showDeadline, showRecurring, showFinance, showNotes,
@@ -181,13 +232,64 @@ export function AddTaskSheet({ onClose }: { onClose: () => void }) {
 
           <CollapsibleOption label="💰 Thu/Chi" active={showFinance} expanded={expandedFinance} onToggle={toggleFinance}>
             <div className="space-y-2 pt-3">
-              <div className="flex gap-2">
-                <button onClick={() => setFinType('income')} className={`flex-1 py-2 rounded-lg text-xs font-medium min-h-[34px] ${finType === 'income' ? 'bg-[rgba(52,211,153,0.2)] text-[var(--success)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>+ Thu</button>
-                <button onClick={() => setFinType('expense')} className={`flex-1 py-2 rounded-lg text-xs font-medium min-h-[34px] ${finType === 'expense' ? 'bg-[rgba(248,113,113,0.2)] text-[var(--error)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>- Chi</button>
-              </div>
-              <input type="text" value={finAmountDisplay} onChange={e => { const n = parseMoneyInput(e.target.value); setFinAmountDisplay(n ? formatMoneyDisplay(n) : ''); }}
-                placeholder="Số tiền (VNĐ)" inputMode="numeric"
-                className="w-full bg-[var(--bg-elevated)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[36px] font-mono" />
+              {/* New format: multiple finance items with categories - now default */}
+              <div className="space-y-2">
+                /* New format: multiple finance items with categories */
+                <div className="space-y-2">
+                  {financeItems.map((item, idx) => (
+                    <div key={idx} className="bg-[var(--bg-elevated)] p-2 rounded-lg border border-[var(--border-subtle)] space-y-2">
+                      <div className="flex gap-2">
+                        <select
+                          value={item.type}
+                          onChange={e => updateFinanceItem(idx, { type: e.target.value as any })}
+                          className={`rounded-lg px-2 py-1.5 text-xs font-bold outline-none border border-[var(--border-subtle)] min-h-[32px] ${
+                            item.type === 'income' ? 'bg-[var(--success)] text-white' : 'bg-[var(--error)] text-white'
+                          }`}
+                        >
+                          <option value="income">Thu</option>
+                          <option value="expense">Chi</option>
+                        </select>
+                        <input
+                          type="number"
+                          value={item.amount || ''}
+                          onChange={e => updateFinanceItem(idx, { amount: Math.max(0, parseInt(e.target.value) || 0) })}
+                          placeholder="Số tiền"
+                          className="flex-1 bg-[var(--bg-surface)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[32px] font-mono"
+                          inputMode="numeric"
+                        />
+                        <button onClick={() => removeFinanceItem(idx)} className="size-8 rounded-lg bg-[var(--bg-surface)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--error)]">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <select
+                          value={item.category}
+                          onChange={e => updateFinanceItem(idx, { category: e.target.value as any })}
+                          className="w-1/3 bg-[var(--bg-surface)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[32px]"
+                        >
+                          {financeCategories.map(fc => (
+                            <option key={fc.id} value={fc.id}>{fc.icon} {fc.name}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={item.note || ''}
+                          onChange={e => updateFinanceItem(idx, { note: e.target.value })}
+                          placeholder="Ghi chú chi tiêu..."
+                          className="flex-1 bg-[var(--bg-surface)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[32px]"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  
+                  <button 
+                    onClick={addFinanceItem}
+                    className="w-full py-2 rounded-lg border border-dashed border-[var(--border-subtle)] text-xs text-[var(--text-muted)] flex items-center justify-center gap-1 hover:bg-[var(--bg-elevated)]"
+                  >
+                    <Plus size={14} /> Thêm khoản thu/chi
+                  </button>
+                </div>
             </div>
           </CollapsibleOption>
 

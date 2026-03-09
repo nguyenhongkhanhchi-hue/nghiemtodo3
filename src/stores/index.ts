@@ -75,7 +75,7 @@ interface TaskStore {
   _version: number;
   initForUser: (userId?: string) => void;
   setActiveTab: (tab: TabType) => void;
-  addTask: (title: string, manualQuadrant?: 'delegate' | 'eliminate', deadline?: number, recurring?: RecurringConfig, deadlineDate?: string, deadlineTime?: string, finance?: TaskFinance, templateId?: string, isGroup?: boolean, opts?: { showDeadline?: boolean; showRecurring?: boolean; showFinance?: boolean; showNotes?: boolean; notes?: string; groupTemplateIds?: string[] }) => string;
+  addTask: (title: string, manualQuadrant?: 'delegate' | 'eliminate', deadline?: number, recurring?: RecurringConfig, deadlineDate?: string, deadlineTime?: string, finance?: TaskFinance | TaskFinance[], templateId?: string, isGroup?: boolean, opts?: { showDeadline?: boolean; showRecurring?: boolean; showFinance?: boolean; showNotes?: boolean; notes?: string; groupTemplateIds?: string[] }) => string;
   updateTask: (id: string, updates: Partial<Task>) => void;
   removeTask: (id: string) => void;
   completeTask: (id: string) => void;
@@ -136,7 +136,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       order: tasks.filter(t => t.status === 'pending').length,
       recurring: recurring || { type: 'none' },
       recurringLabel: recurring && recurring.type !== 'none' ? title : undefined,
-      finance: finance ? [finance] : undefined, templateId, isGroup,
+      finance: finance ? (Array.isArray(finance) ? finance : [finance]) : undefined, templateId, isGroup,
       groupTemplateIds: opts?.groupTemplateIds,
       showDeadline: opts?.showDeadline ?? !!deadline,
       showRecurring: opts?.showRecurring ?? (recurring?.type !== 'none'),
