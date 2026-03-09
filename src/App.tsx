@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSettingsStore, useAuthStore, useTaskStore, useChatStore, useGamificationStore, useTemplateStore, useTopicStore } from '@/stores';
 import { supabase } from '@/lib/supabase';
 import { checkDeadlineNotifications } from '@/lib/notifications';
@@ -48,9 +48,10 @@ export default function App() {
   const [showTemplateEditor, setShowTemplateEditor] = useState(false);
   const [templateMode, setTemplateMode] = useState<'single' | 'group'>('single');
   const [triggeredReminder, setTriggeredReminder] = useState<Reminder | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // Auto screen control (dim + lock after 5s inactivity)
-  useAutoScreenControl();
+  const { handleSwipeUnlock } = useAutoScreenControl();
 
   // Font scale
   useEffect(() => { document.documentElement.style.setProperty('--font-scale', String(fontScale)); }, [fontScale]);
@@ -204,10 +205,32 @@ export default function App() {
       {/* Screen dim + lock overlay */}
       {lockTouch && (
         <div
-          className="fixed inset-0 z-[9999] flex flex-col items-center justify-center select-none"
+          className="unlock-overlay fixed inset-0 z-[9999] flex flex-col items-center justify-center select-none"
           style={{
             background: `rgba(0,0,0,${1 - screenBrightness / 100})`,
-            touchAction: 'none',
+          }}
+          onTouchStart={(e) => { touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }}
+          onTouchEnd={(e) => {
+            if (!touchStartRef.current) return;
+            const touch = e.changedTouches[0];
+            const deltaX = touch.clientX - touchStartRef.current.x;
+            const deltaY = touch.clientY - touchStartRef.current.y;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            if (distance >= 80) { // SWIPE_THRESHOLD
+              handleSwipeUnlock();
+            }
+            touchStartRef.current = null;
+          }}
+          onMouseDown={(e) => { touchStartRef.current = { x: e.clientX, y: e.clientY }; }}
+          onMouseUp={(e) => {
+            if (!touchStartRef.current) return;
+            const deltaX = e.clientX - touchStartRef.current.x;
+            const deltaY = e.clientY - touchStartRef.current.y;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            if (distance >= 80) { // SWIPE_THRESHOLD
+              handleSwipeUnlock();
+            }
+            touchStartRef.current = null;
           }}
         >
           <div className="flex flex-col items-center gap-3 text-white/60 pointer-events-none">
