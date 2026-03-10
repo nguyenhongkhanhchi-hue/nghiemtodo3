@@ -18,7 +18,7 @@ type EliminateTab = 'all';
 
 export function TaskList() {
   const tasks = useTaskStore(s => s.tasks);
-  const timer = useTaskStore(s => s.timer);
+  const timers = useTaskStore(s => s.timers); // multi-timer
   const { dailyTimeCost } = useSettingsStore();
   const startTimer = useTaskStore(s => s.startTimer);
   const pauseTimer = useTaskStore(s => s.pauseTimer);
@@ -152,19 +152,18 @@ export function TaskList() {
       case 'view': setViewTask(task); break;
       case 'edit': setEditTask(task); break;
       case 'start': startTimer(task.id); break;
-      case 'pause': pauseTimer(); break;
-      case 'resume': resumeTimer(); break;
+      case 'pause': pauseTimer(task.id); break;
+      case 'resume': resumeTimer(task.id); break;
       case 'complete': completeTask(task.id); break;
       case 'delete': removeTask(task.id); break;
       case 'restore':
-        // ✅ Restore: auto-recalculate quadrant trong store
         restoreTask(task.id);
         break;
     }
   };
 
-  const isTimerActive = (taskId: string) => {
-    return timer.taskId === taskId && (timer.isRunning || timer.isPaused);
+  const getActiveTimer = (taskId: string) => {
+    return timers.find(t => t.taskId === taskId && (t.isRunning || t.isPaused));
   };
 
   const canStartTimer = (task: Task) => {
@@ -398,7 +397,8 @@ export function TaskList() {
           </div>
         ) : (
           filteredTasks.map((task, index) => {
-            const isActive = isTimerActive(task.id);
+            const activeTimer = getActiveTimer(task.id);
+            const isActive = !!activeTimer;
             const canTimer = canStartTimer(task);
             const isDone = task.status === 'done';
             const taskIsOverdue = isTaskOverdue(task);
@@ -477,12 +477,12 @@ export function TaskList() {
                     </button>
                     {canTimer && !isDone && (
                       <>
-                        {isActive && timer.isPaused ? (
+                        {isActive && activeTimer?.isPaused ? (
                           <button onClick={() => handleTaskAction(task, 'resume')}
                             className="size-7 rounded-lg bg-[var(--accent-dim)] flex items-center justify-center text-[var(--accent-primary)]">
                             <Play size={12} />
                           </button>
-                        ) : isActive && timer.isRunning ? (
+                        ) : isActive && activeTimer?.isRunning ? (
                           <button onClick={() => handleTaskAction(task, 'pause')}
                             className="size-7 rounded-lg bg-[var(--accent-dim)] flex items-center justify-center text-[var(--accent-primary)]">
                             <Pause size={12} />

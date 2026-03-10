@@ -9,12 +9,14 @@ export function UnifiedFAB({
   onAddGroupTemplate,
   onOpenLucy, 
   showLucy,
+  onGoToTemplates,
 }: { 
   onAddTask: () => void;
   onAddSingleTemplate?: () => void;
   onAddGroupTemplate?: () => void;
   onOpenLucy: () => void; 
   showLucy: boolean;
+  onGoToTemplates?: () => void;
 }) {
   const currentPage = useSettingsStore(s => s.currentPage);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
@@ -23,13 +25,13 @@ export function UnifiedFAB({
 
   return (
     <>
-      {/* Add Button - hiển thị ở trang Tasks hoặc Templates */}
+      {/* Tasks page: nút chuyển sang MẪU thay vì thêm việc trực tiếp */}
       {isTasksPage && (
-        <button onClick={onAddTask}
+        <button onClick={onGoToTemplates}
           className="fixed z-[61] size-14 rounded-full bg-[var(--accent-primary)] text-[var(--bg-base)] flex items-center justify-center shadow-2xl active:scale-95 transition-all duration-200"
           style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 138px)', right: '16px' }}
-          aria-label="Thêm việc">
-          <Plus size={26} strokeWidth={2.5} />
+          aria-label="Thêm từ mẫu">
+          <FileText size={24} strokeWidth={2} />
         </button>
       )}
 

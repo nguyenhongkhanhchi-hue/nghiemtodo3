@@ -103,6 +103,17 @@ export interface TaskTemplate {
   groupIds?: string[];
 }
 
+export interface ActiveTimer {
+  taskId: string;
+  isRunning: boolean;
+  isPaused: boolean;
+  elapsed: number;
+  startTime: number | null;
+  pausedAt: number | null;
+  totalPausedDuration: number;
+}
+
+// Legacy single timer - kept for backward compat restore
 export interface TimerState {
   taskId: string | null;
   isRunning: boolean;

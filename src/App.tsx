@@ -270,6 +270,7 @@ export default function App() {
         onAddGroupTemplate={() => { setTemplateMode('group'); setShowTemplateEditor(true); }}
         onOpenLucy={() => setShowLucy(!showLucy)}
         showLucy={showLucy}
+        onGoToTemplates={() => { useSettingsStore.getState().setCurrentPage('templates'); }}
       />
       {showAddTask && <AddTaskSheet onClose={() => setShowAddTask(false)} />}
       {triggeredReminder && (

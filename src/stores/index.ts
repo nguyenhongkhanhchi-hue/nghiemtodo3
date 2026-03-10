@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  Task, ChatMessage, TimerState, TabType, PageType,
+  Task, ChatMessage, TimerState, ActiveTimer, TabType, PageType,
   EisenhowerQuadrant, RecurringConfig, UserProfile,
   GamificationState, NotificationSettings, Reward,
   TaskTemplate, TaskFinance, Achievement, Topic, VoiceSettings,
@@ -70,21 +70,22 @@ export const useAuthStore = create<AuthStore>((set) => ({
 interface TaskStore {
   tasks: Task[];
   activeTab: TabType;
-  timer: TimerState;
+  timer: TimerState; // legacy single timer (kept for backward compat)
+  timers: ActiveTimer[]; // multi-timer support
   _userId: string | undefined;
   _version: number;
   initForUser: (userId?: string) => void;
   setActiveTab: (tab: TabType) => void;
-  addTask: (title: string, manualQuadrant?: 'delegate' | 'eliminate', deadline?: number, recurring?: RecurringConfig, deadlineDate?: string, deadlineTime?: string, finance?: TaskFinance | TaskFinance[], templateId?: string, isGroup?: boolean, opts?: { showDeadline?: boolean; showRecurring?: boolean; showFinance?: boolean; showNotes?: boolean; notes?: string; groupTemplateIds?: string[] }) => string;
+  addTask: (title: string, manualQuadrant?: 'delegate' | 'eliminate', deadline?: number, recurring?: RecurringConfig, deadlineDate?: string, deadlineTime?: string, finance?: TaskFinance | TaskFinance[], templateId?: string, isGroup?: boolean, opts?: { showDeadline?: boolean; showRecurring?: boolean; showFinance?: boolean; showNotes?: boolean; notes?: string; groupTemplateIds?: string[]; duration?: number; reminderSettings?: { enabled: boolean; minutesBefore: number; repeatTimes: number; repeatInterval: number } }) => string;
   updateTask: (id: string, updates: Partial<Task>) => void;
   removeTask: (id: string) => void;
   completeTask: (id: string) => void;
   restoreTask: (id: string) => void;
   reorderTasks: (fromIndex: number, toIndex: number) => void;
   startTimer: (taskId: string) => void;
-  pauseTimer: () => void;
-  resumeTimer: () => void;
-  stopTimer: () => void;
+  pauseTimer: (taskId: string) => void;
+  resumeTimer: (taskId: string) => void;
+  stopTimer: (taskId: string) => void;
   tickTimer: () => void;
   clearAllData: () => void;
   checkAndMarkOverdue: () => void;
@@ -100,24 +101,34 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   tasks: [],
   activeTab: 'pending',
   timer: { ...defaultTimer },
+  timers: [],
   _userId: undefined,
   _version: 0,
 
   initForUser: async (userId) => {
     if (userId === 'admin') {
       const key = getUserKey('nw_tasks', userId);
-      const savedTimer = loadFromStorage<TimerState | null>(getUserKey('nw_timer', userId), null);
-      const restoredTimer = savedTimer && savedTimer.isRunning ? savedTimer : { ...defaultTimer };
-      set({ tasks: loadFromStorage<Task[]>(key, []), _userId: userId, timer: restoredTimer });
+      const savedTimers = loadFromStorage<ActiveTimer[]>(getUserKey('nw_timers', userId), []);
+      // also try legacy single timer
+      const legacySavedTimer = loadFromStorage<TimerState | null>(getUserKey('nw_timer', userId), null);
+      let restoredTimers = savedTimers.filter(t => t.isRunning || t.isPaused);
+      if (restoredTimers.length === 0 && legacySavedTimer?.taskId && (legacySavedTimer.isRunning || legacySavedTimer.isPaused)) {
+        restoredTimers = [{ ...legacySavedTimer, taskId: legacySavedTimer.taskId! }];
+      }
+      set({ tasks: loadFromStorage<Task[]>(key, []), _userId: userId, timers: restoredTimers });
       get().checkAndMarkOverdue();
       return;
     }
 
     await migrateLocalStorageToDatabase(userId);
     const tasksFromDB = await loadTasksFromDB(userId);
-    const savedTimer = loadFromStorage<TimerState | null>(getUserKey('nw_timer', userId), null);
-    const restoredTimer = savedTimer && savedTimer.isRunning ? savedTimer : { ...defaultTimer };
-    set({ tasks: tasksFromDB, _userId: userId, timer: restoredTimer });
+    const savedTimers = loadFromStorage<ActiveTimer[]>(getUserKey('nw_timers', userId), []);
+    const legacySavedTimer = loadFromStorage<TimerState | null>(getUserKey('nw_timer', userId), null);
+    let restoredTimers = savedTimers.filter(t => t.isRunning || t.isPaused);
+    if (restoredTimers.length === 0 && legacySavedTimer?.taskId && (legacySavedTimer.isRunning || legacySavedTimer.isPaused)) {
+      restoredTimers = [{ ...legacySavedTimer, taskId: legacySavedTimer.taskId! }];
+    }
+    set({ tasks: tasksFromDB, _userId: userId, timers: restoredTimers });
     get().checkAndMarkOverdue();
   },
   setActiveTab: (tab) => set({ activeTab: tab }),
@@ -130,6 +141,22 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     
     const quadrant = calculateQuadrant(deadline, manualQuadrant);
     
+    // Build reminder objects if reminderSettings provided
+    let reminders: import('@/types').Reminder[] | undefined;
+    if (opts?.reminderSettings?.enabled && deadline) {
+      const { minutesBefore, repeatTimes, repeatInterval } = opts.reminderSettings;
+      const triggerTime = deadline - minutesBefore * 60 * 1000;
+      reminders = Array.from({ length: repeatTimes }, (_, i) => ({
+        id: `${id}_reminder_${i}`,
+        taskId: id,
+        triggerTime: triggerTime + i * repeatInterval * 1000,
+        repeatCount: i + 1,
+        repeatInterval: repeatInterval * 1000,
+        acknowledged: false,
+        createdAt: Date.now(),
+      }));
+    }
+
     const newTask: Task = {
       id, title, status: 'pending', quadrant,
       createdAt: Date.now(), deadline, deadlineDate, deadlineTime,
@@ -143,6 +170,9 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       showFinance: opts?.showFinance ?? !!finance,
       showNotes: opts?.showNotes ?? !!opts?.notes,
       notes: opts?.notes,
+      duration: opts?.duration,
+      reminders: reminders,
+      reminderSettings: opts?.reminderSettings,
     };
     const updated = [...tasks, newTask];
     saveToStorage(getUserKey('nw_tasks', userId), updated);
@@ -188,15 +218,50 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     const now = getNowInTimezone(tz).getTime();
     const isOnTime = !task.deadline || now <= task.deadline;
     const xpEarned = isOnTime ? 10 : 5;
+
+    // Save elapsed time from active timer before completing
+    // Re-calculate elapsed in case timer was restored from storage without being ticked
+    const activeTimer = get().timers.find(t => t.taskId === id);
+    let elapsedExtra = 0;
+    if (activeTimer) {
+      if (activeTimer.isRunning && !activeTimer.isPaused && activeTimer.startTime) {
+        // Timer is running: recalculate from startTime to avoid stale elapsed
+        elapsedExtra = Math.floor((Date.now() - activeTimer.startTime) / 1000) - activeTimer.totalPausedDuration;
+      } else {
+        // Timer is paused or stopped: use saved elapsed
+        elapsedExtra = activeTimer.elapsed;
+      }
+      elapsedExtra = Math.max(0, elapsedExtra);
+    }
+
     const updated = get().tasks.map(t =>
-      t.id === id ? { ...t, status: 'done' as const, completedAt: Date.now() } : t
+      t.id === id ? {
+        ...t,
+        status: 'done' as const,
+        completedAt: Date.now(),
+        duration: (t.duration || 0) + elapsedExtra,
+      } : t
     );
+
+    // Log time if there was an active timer
+    if (activeTimer && elapsedExtra > 0) {
+      const nowDate = getNowInTimezone(tz);
+      const todayStr = `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, '0')}-${String(nowDate.getDate()).padStart(2, '0')}`;
+      useTimeLogStore.getState().addTimeLog({
+        type: 'activity',
+        title: task.title,
+        startTime: activeTimer.startTime || (Date.now() - elapsedExtra * 1000),
+        endTime: Date.now(),
+        duration: elapsedExtra,
+        date: todayStr,
+        taskId: task.id
+      });
+    }
+
     saveToStorage(getUserKey('nw_tasks', userId), updated);
-    const timer = get().timer;
-    set({
-      tasks: updated,
-      timer: timer.taskId === id ? { ...defaultTimer } : timer,
-    });
+    const newTimers = get().timers.filter(t => t.taskId !== id);
+    saveToStorage(getUserKey('nw_timers', userId), newTimers);
+    set({ tasks: updated, timers: newTimers });
     if (userId && userId !== 'admin') saveTasksToDB(userId, updated);
     useGamificationStore.getState().onTaskCompleted(task.quadrant, task.duration || 0, tz, xpEarned);
     playTaskCelebrationSound();
@@ -246,106 +311,112 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       return;
     }
     
-    const savedTimer = loadFromStorage<TimerState | null>(getUserKey('nw_timer', get()._userId), null);
-    if (savedTimer && savedTimer.taskId === taskId && savedTimer.isRunning) {
-      const elapsedSinceStart = Math.floor((Date.now() - (savedTimer.startTime || Date.now())) / 1000) - savedTimer.totalPausedDuration;
-      set({ timer: { ...savedTimer, elapsed: Math.max(0, elapsedSinceStart) } });
-      return;
-    }
+    const userId = get()._userId;
+    const currentTimers = get().timers;
+    
+    // If timer already active for this task, just sync elapsed
+    const existing = currentTimers.find(t => t.taskId === taskId);
+    if (existing && (existing.isRunning || existing.isPaused)) return;
     
     const updated = get().tasks.map(t => t.id === taskId ? { ...t, status: (t.status === 'done' ? t.status : 'in_progress') as any } : t);
-    saveToStorage(getUserKey('nw_tasks', get()._userId), updated);
-    const newTimer = { taskId, isRunning: true, isPaused: false, elapsed: 0, startTime: Date.now(), pausedAt: null, totalPausedDuration: 0 };
-    saveToStorage(getUserKey('nw_timer', get()._userId), newTimer);
-    set({ tasks: updated, timer: newTimer });
+    saveToStorage(getUserKey('nw_tasks', userId), updated);
+    const newTimer: ActiveTimer = { taskId, isRunning: true, isPaused: false, elapsed: 0, startTime: Date.now(), pausedAt: null, totalPausedDuration: 0 };
+    const newTimers = [...currentTimers.filter(t => t.taskId !== taskId), newTimer];
+    saveToStorage(getUserKey('nw_timers', userId), newTimers);
+    set({ tasks: updated, timers: newTimers });
     playTimerStartSound();
   },
-  pauseTimer: () => {
-    const t = get().timer;
-    if (t.isRunning && !t.isPaused) {
-      const userId = get()._userId;
-      const newTimer = { ...t, isPaused: true, isRunning: false, pausedAt: Date.now() };
-      const updatedTasks = t.taskId
-        ? get().tasks.map(task => task.id === t.taskId
-          ? { ...task, status: (task.status === 'done' ? task.status : 'paused') as any }
-          : task)
-        : get().tasks;
-      saveToStorage(getUserKey('nw_tasks', userId), updatedTasks);
-      set({ timer: newTimer, tasks: updatedTasks });
-      saveToStorage(getUserKey('nw_timer', userId), newTimer);
-      if (userId && userId !== 'admin') saveTasksToDB(userId, updatedTasks);
-      playTimerPauseSound();
-    }
-  },
-  resumeTimer: () => {
-    const t = get().timer;
-    if (t.isPaused && t.pausedAt) {
-      const userId = get()._userId;
-      const pd = Math.floor((Date.now() - t.pausedAt) / 1000);
-      const newTimer = { ...t, isPaused: false, isRunning: true, pausedAt: null, totalPausedDuration: t.totalPausedDuration + pd };
-      const updatedTasks = t.taskId
-        ? get().tasks.map(task => task.id === t.taskId
-          ? { ...task, status: (task.status === 'done' ? task.status : 'in_progress') as any }
-          : task)
-        : get().tasks;
-      saveToStorage(getUserKey('nw_tasks', userId), updatedTasks);
-      set({ timer: newTimer, tasks: updatedTasks });
-      saveToStorage(getUserKey('nw_timer', userId), newTimer);
-      if (userId && userId !== 'admin') saveTasksToDB(userId, updatedTasks);
-    }
-  },
-  stopTimer: () => {
-    const t = get().timer;
+  pauseTimer: (taskId) => {
     const userId = get()._userId;
-    if (t.taskId) {
-      const elapsed = t.elapsed;
-      const task = get().tasks.find(tk => tk.id === t.taskId);
+    const t = get().timers.find(timer => timer.taskId === taskId);
+    if (!t || !t.isRunning || t.isPaused) return;
+    const newTimer: ActiveTimer = { ...t, isPaused: true, isRunning: false, pausedAt: Date.now() };
+    const updatedTasks = get().tasks.map(task => task.id === taskId
+      ? { ...task, status: (task.status === 'done' ? task.status : 'paused') as any }
+      : task);
+    const newTimers = get().timers.map(timer => timer.taskId === taskId ? newTimer : timer);
+    saveToStorage(getUserKey('nw_tasks', userId), updatedTasks);
+    saveToStorage(getUserKey('nw_timers', userId), newTimers);
+    set({ timers: newTimers, tasks: updatedTasks });
+    if (userId && userId !== 'admin') saveTasksToDB(userId, updatedTasks);
+    playTimerPauseSound();
+  },
+  resumeTimer: (taskId) => {
+    const userId = get()._userId;
+    const t = get().timers.find(timer => timer.taskId === taskId);
+    if (!t || !t.isPaused || !t.pausedAt) return;
+    const pd = Math.floor((Date.now() - t.pausedAt) / 1000);
+    const newTimer: ActiveTimer = { ...t, isPaused: false, isRunning: true, pausedAt: null, totalPausedDuration: t.totalPausedDuration + pd };
+    const updatedTasks = get().tasks.map(task => task.id === taskId
+      ? { ...task, status: (task.status === 'done' ? task.status : 'in_progress') as any }
+      : task);
+    const newTimers = get().timers.map(timer => timer.taskId === taskId ? newTimer : timer);
+    saveToStorage(getUserKey('nw_tasks', userId), updatedTasks);
+    saveToStorage(getUserKey('nw_timers', userId), newTimers);
+    set({ timers: newTimers, tasks: updatedTasks });
+    if (userId && userId !== 'admin') saveTasksToDB(userId, updatedTasks);
+  },
+  stopTimer: (taskId) => {
+    const t = get().timers.find(timer => timer.taskId === taskId);
+    if (!t) return;
+    // Re-calculate elapsed in case timer was restored from storage without being ticked
+    let elapsed = t.elapsed;
+    if (t.isRunning && !t.isPaused && t.startTime) {
+      elapsed = Math.floor((Date.now() - t.startTime) / 1000) - t.totalPausedDuration;
+      elapsed = Math.max(0, elapsed);
+    }
+    const task = get().tasks.find(tk => tk.id === taskId);
+    
+    // Create Time Log entry
+    if (task && elapsed > 0) {
+      const tz = useSettingsStore.getState().timezone;
+      const now = getNowInTimezone(tz);
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       
-      // Create Time Log entry
-      if (task && elapsed > 0) {
-        const tz = useSettingsStore.getState().timezone;
-        const now = getNowInTimezone(tz);
-        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-        
-        useTimeLogStore.getState().addTimeLog({
-          type: 'activity',
-          title: task.title,
-          startTime: t.startTime || (Date.now() - elapsed * 1000),
-          endTime: Date.now(),
-          duration: elapsed,
-          date: todayStr,
-          taskId: task.id
-        });
-      }
-
-      const updated = get().tasks.map(tk => {
-        if (tk.id === t.taskId) {
-          const newDuration = (tk.duration || 0) + elapsed;
-          const newStatus = tk.status === 'in_progress' ? 'paused' as const : tk.status;
-          return { ...tk, duration: newDuration, status: newStatus };
-        }
-        return tk;
+      useTimeLogStore.getState().addTimeLog({
+        type: 'activity',
+        title: task.title,
+        startTime: t.startTime || (Date.now() - elapsed * 1000),
+        endTime: Date.now(),
+        duration: elapsed,
+        date: todayStr,
+        taskId: task.id
       });
-      saveToStorage(getUserKey('nw_tasks', userId), updated);
-      localStorage.removeItem(getUserKey('nw_timer', userId));
-      set({ tasks: updated, timer: { ...defaultTimer } });
-      if (userId && userId !== 'admin') saveTasksToDB(userId, updated);
-      playTimerFinishSound();
-    } else set({ timer: { ...defaultTimer } });
+    }
+
+    const updated = get().tasks.map(tk => {
+      if (tk.id === taskId) {
+        const newDuration = (tk.duration || 0) + elapsed;
+        const newStatus = tk.status === 'in_progress' ? 'paused' as const : tk.status;
+        return { ...tk, duration: newDuration, status: newStatus };
+      }
+      return tk;
+    });
+    const newTimers = get().timers.filter(timer => timer.taskId !== taskId);
+    saveToStorage(getUserKey('nw_tasks', userId), updated);
+    saveToStorage(getUserKey('nw_timers', userId), newTimers);
+    set({ tasks: updated, timers: newTimers });
+    if (userId && userId !== 'admin') saveTasksToDB(userId, updated);
+    playTimerFinishSound();
   },
   tickTimer: () => {
-    const t = get().timer;
-    if (t.isRunning && t.startTime && !t.isPaused) {
-      const newTimer = { ...t, elapsed: Math.floor((Date.now() - t.startTime) / 1000) - t.totalPausedDuration };
-      set({ timer: newTimer });
-      saveToStorage(getUserKey('nw_timer', get()._userId), newTimer);
-    }
+    const currentTimers = get().timers;
+    const runningTimers = currentTimers.filter(t => t.isRunning && t.startTime && !t.isPaused);
+    if (runningTimers.length === 0) return;
+    const newTimers = currentTimers.map(t => {
+      if (t.isRunning && t.startTime && !t.isPaused) {
+        return { ...t, elapsed: Math.floor((Date.now() - t.startTime) / 1000) - t.totalPausedDuration };
+      }
+      return t;
+    });
+    set({ timers: newTimers });
+    saveToStorage(getUserKey('nw_timers', get()._userId), newTimers);
   },
   clearAllData: () => {
     const u = get()._userId;
-    ['nw_tasks', 'nw_chat', 'nw_gamification', 'nw_templates', 'nw_topics'].forEach(k => localStorage.removeItem(getUserKey(k, u)));
+    ['nw_tasks', 'nw_chat', 'nw_gamification', 'nw_templates', 'nw_topics', 'nw_timers', 'nw_timer'].forEach(k => localStorage.removeItem(getUserKey(k, u)));
     localStorage.removeItem('nw_settings');
-    set({ tasks: [], timer: { ...defaultTimer } });
+    set({ tasks: [], timer: { ...defaultTimer }, timers: [] });
   },
   checkAndMarkOverdue: () => {
     const userId = get()._userId;
@@ -440,7 +511,7 @@ interface TemplateStore {
   updateTemplate: (id: string, updates: Partial<TaskTemplate>) => void;
   removeTemplate: (id: string) => void;
   addGroupTasksToTodo: (groupTemplateId: string, quadrant: EisenhowerQuadrant, deadlineDate?: string, deadlineTime?: string, recurringOverride?: RecurringConfig, notesOverride?: string) => void;
-  addSingleTaskToTodo: (templateId: string, quadrant: EisenhowerQuadrant, deadline?: number, deadlineDate?: string, deadlineTime?: string, finance?: TaskFinance, recurring?: RecurringConfig, notes?: string) => void;
+  addSingleTaskToTodo: (templateId: string, quadrant: EisenhowerQuadrant, deadline?: number, deadlineDate?: string, deadlineTime?: string, finance?: TaskFinance, recurring?: RecurringConfig, notes?: string, duration?: number, reminderSettings?: { enabled: boolean; minutesBefore: number; repeatTimes: number; repeatInterval: number }) => void;
   exportTemplates: () => string;
   importTemplates: (json: string) => number;
   hasTemplateForTitle: (title: string) => boolean;
@@ -506,7 +577,7 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
       );
     });
   },
-  addSingleTaskToTodo: (templateId, quadrant, deadline, deadlineDate, deadlineTime, finance, recurring, notes) => {
+  addSingleTaskToTodo: (templateId, quadrant, deadline, deadlineDate, deadlineTime, finance, recurring, notes, duration, reminderSettings) => {
     const template = get().templates.find(t => t.id === templateId);
     if (!template) return;
     const taskStore = useTaskStore.getState();
@@ -515,7 +586,15 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
     const manualQuadrant = quadrant === 'delegate' || quadrant === 'eliminate' ? quadrant : undefined;
     taskStore.addTask(
       template.title, manualQuadrant, deadline, rec, deadlineDate, deadlineTime, fin, templateId, false,
-      { notes: notes || template.notes, showDeadline: !!deadline, showRecurring: rec?.type !== 'none', showFinance: !!fin, showNotes: !!(notes || template.notes) },
+      {
+        notes: notes || template.notes,
+        showDeadline: !!deadline,
+        showRecurring: rec?.type !== 'none',
+        showFinance: !!fin,
+        showNotes: !!(notes || template.notes),
+        duration,
+        reminderSettings,
+      },
     );
   },
   exportTemplates: () => {

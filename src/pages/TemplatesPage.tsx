@@ -1,12 +1,11 @@
-import { useState, useMemo, useCallback } from 'react';
-import { useTemplateStore, useTopicStore, useTaskStore, useSettingsStore } from '@/stores';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useTemplateStore, useTopicStore, useSettingsStore } from '@/stores';
 import { convertYoutubeUrl, isYoutubeUrl } from '@/lib/youtubeUtils';
 import {
   Plus, Trash2, Edit3, X, Save, Youtube, DollarSign, ArrowRight,
   Download, Upload, Tag, Check, Eye, FolderOpen, Layers, ChevronDown,
 } from 'lucide-react';
-import type { TaskTemplate, EisenhowerQuadrant, MediaBlock, TaskFinance, RecurringType } from '@/types';
-import { QUADRANT_LABELS } from '@/types';
+import type { TaskTemplate, MediaBlock, TaskFinance, RecurringType } from '@/types';
 import { toast } from '@/lib/toast';
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -73,7 +72,30 @@ function TemplateInfoModal({ template, onClose, onEdit }: { template: TaskTempla
   );
 }
 
-// ── Add to Todo Dialog ──
+// Helper: format thời gian còn lại đến deadline
+function formatTimeUntilDeadlineTpl(deadlineDate: string, deadlineTime: string): { text: string; color: string } {
+  const deadline = new Date(`${deadlineDate}T${deadlineTime || '23:59'}:00`).getTime();
+  const now = Date.now();
+  const remaining = deadline - now;
+  if (remaining < 0) {
+    const abs = Math.abs(remaining);
+    const days = Math.floor(abs / 86400000);
+    const hours = Math.floor(abs / 3600000);
+    const mins = Math.floor(abs / 60000);
+    if (days > 0) return { text: `Đã quá hạn ${days} ngày`, color: 'var(--error)' };
+    if (hours > 0) return { text: `Đã quá hạn ${hours} giờ`, color: 'var(--error)' };
+    return { text: `Đã quá hạn ${mins} phút`, color: 'var(--error)' };
+  }
+  const hours = Math.floor(remaining / 3600000);
+  const days = Math.floor(hours / 24);
+  const mins = Math.floor((remaining % 3600000) / 60000);
+  if (hours < 1) return { text: `Còn ${mins} phút`, color: '#F87171' };
+  if (hours < 24) return { text: `Còn ${hours} giờ ${mins} phút`, color: '#FBBF24' };
+  if (days < 7) return { text: `Còn ${days} ngày`, color: '#60A5FA' };
+  return { text: `Còn ${days} ngày`, color: 'var(--text-muted)' };
+}
+
+// ── Add to Todo Dialog ── (giao diện mới giống AddTaskSheet)
 function AddToTodoDialog({ template, onClose }: { template: TaskTemplate; onClose: () => void }) {
   const addSingleTaskToTodo = useTemplateStore(s => s.addSingleTaskToTodo);
   const addGroupTasksToTodo = useTemplateStore(s => s.addGroupTasksToTodo);
@@ -81,205 +103,266 @@ function AddToTodoDialog({ template, onClose }: { template: TaskTemplate; onClos
   const now = new Date();
   const nowDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const nowTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  // Deadline
+  const [showDeadline, setShowDeadline] = useState(false);
+  const [expandedDeadline, setExpandedDeadline] = useState(false);
   const [deadlineDate, setDeadlineDate] = useState(nowDate);
   const [deadlineTime, setDeadlineTime] = useState(nowTime);
-  const [quadrant, setQuadrant] = useState<EisenhowerQuadrant>('do_first');
-  const [recurringType, setRecurringType] = useState<RecurringType>(template.recurring?.type || 'none');
-  const [notes, setNotes] = useState('');
-  const [showDeadline, setShowDeadline] = useState(false);
+
+  // Reminder (chỉ khi có deadline)
+  const [showReminder, setShowReminder] = useState(false);
+  const [expandedReminder, setExpandedReminder] = useState(false);
+  const [reminderMinutes, setReminderMinutes] = useState(15);
+  const [reminderRepeat, setReminderRepeat] = useState(1);
+
+  // Thời lượng dự kiến (phút)
+  const [showDuration, setShowDuration] = useState(true);
+  const [expandedDuration, setExpandedDuration] = useState(true);
+  const [durationMinutes, setDurationMinutes] = useState(30);
+
+  // Recurring
   const [showRecurring, setShowRecurring] = useState(false);
+  const [expandedRecurring, setExpandedRecurring] = useState(false);
+  const [recurringType, setRecurringType] = useState<RecurringType>(template.recurring?.type || 'none');
+
+  // Finance
   const [showFinance, setShowFinance] = useState(false);
-  const [showNotes, setShowNotes] = useState(false);
-  
-  // New finance format states - now default
-  const [useNewFinanceFormat, setUseNewFinanceFormat] = useState(true);
+  const [expandedFinance, setExpandedFinance] = useState(false);
   const [financeItems, setFinanceItems] = useState<TaskFinance[]>([]);
-  const [finType, setFinType] = useState<'income' | 'expense'>('expense');
-  const [finAmount, setFinAmount] = useState(0);
+
+  // Notes
+  const [showNotes, setShowNotes] = useState(false);
+  const [expandedNotes, setExpandedNotes] = useState(false);
+  const [notes, setNotes] = useState('');
+
+  // Tick for deadline display update
+  const [, setTick] = useState(0);
+  useEffect(() => { const t = setInterval(() => setTick(d => d + 1), 1000); return () => clearInterval(t); }, []);
+
+  const toggleDeadline = () => {
+    const next = !showDeadline;
+    setShowDeadline(next);
+    setExpandedDeadline(next);
+    if (!next) { setShowReminder(false); setExpandedReminder(false); }
+  };
+
+  const addFinanceItem = () => {
+    setFinanceItems([...financeItems, {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+      type: 'expense', amount: 0, category: financeCategories[0]?.id || 'other', note: ''
+    }]);
+  };
 
   const handleAdd = () => {
+    // Tính deadline
+    let deadline: number | undefined;
+    if (showDeadline && deadlineDate) {
+      deadline = new Date(`${deadlineDate}T${deadlineTime || '23:59'}:00`).getTime();
+    }
+
+    // Tính quadrant tự động từ deadline (không cho người dùng chọn thủ công)
+    // logic: nếu có deadline trong 24h → do_first, >24h → schedule, không có deadline → do_first
+    // Delegate/Eliminate không áp dụng ở đây, người dùng phải tự chuyển sau
+
+    // Reminder settings
+    const reminderSettings = showDeadline && showReminder && deadline ? {
+      enabled: true,
+      minutesBefore: reminderMinutes,
+      repeatTimes: reminderRepeat,
+      repeatInterval: 60, // 60 giây giữa các lần nhắc
+    } : undefined;
+
+    // Finance
+    const validFinance = financeItems.filter(f => f.amount > 0);
+
     if (template.isGroup) {
-      addGroupTasksToTodo(template.id, quadrant, showDeadline ? deadlineDate : undefined, showDeadline ? deadlineTime : undefined, { type: showRecurring ? recurringType : 'none' }, notes || undefined);
+      addGroupTasksToTodo(
+        template.id,
+        'do_first', // quadrant tự động
+        showDeadline ? deadlineDate : undefined,
+        showDeadline ? deadlineTime : undefined,
+        { type: showRecurring ? recurringType : 'none' },
+        notes || undefined,
+      );
     } else {
-      let deadline: number | undefined;
-      if (showDeadline && deadlineDate) deadline = new Date(`${deadlineDate}T${deadlineTime || '23:59'}:00`).getTime();
-      if (quadrant === 'do_first' && !deadline) { const d = new Date(); d.setHours(23, 59, 0, 0); deadline = d.getTime(); }
-      if (quadrant === 'schedule' && !deadline) { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(23, 59, 0, 0); deadline = d.getTime(); }
-      
-      // Handle finance based on format
-      let finance: TaskFinance | undefined;
-      if (useNewFinanceFormat) {
-        const validItems = financeItems.filter(f => f.amount > 0);
-        if (validItems.length > 0) finance = validItems[0];
-      } else if (showFinance && finAmount > 0) {
-        finance = {
-          id: Date.now().toString(36) + Math.random().toString(36).slice(2),
-          type: finType,
-          amount: finAmount,
-          category: financeCategories[0]?.id || 'other',
-          note: ''
-        };
-      }
-      
-      addSingleTaskToTodo(template.id, quadrant, deadline, showDeadline ? deadlineDate : undefined, showDeadline ? deadlineTime : undefined, finance, { type: showRecurring ? recurringType : 'none' }, notes || undefined);
+      const fin = validFinance.length > 0 ? validFinance[0] : undefined;
+      addSingleTaskToTodo(
+        template.id,
+        'do_first', // quadrant tự động - sẽ được tính lại trong addTask
+        deadline,
+        showDeadline ? deadlineDate : undefined,
+        showDeadline ? deadlineTime : undefined,
+        fin,
+        { type: showRecurring ? recurringType : 'none' },
+        notes || undefined,
+        durationMinutes * 60, // duration tính bằng giây
+        reminderSettings,
+      );
     }
     onClose();
   };
 
-  const toggles = [
-    { key: 'deadline', label: '⏰ Hạn chót', active: showDeadline, toggle: () => setShowDeadline(!showDeadline) },
-    { key: 'recurring', label: '🔁 Lặp lại', active: showRecurring, toggle: () => setShowRecurring(!showRecurring) },
-    { key: 'finance', label: '💰 Thu/Chi', active: showFinance, toggle: () => setShowFinance(!showFinance) },
-    { key: 'notes', label: '📝 Ghi chú', active: showNotes, toggle: () => setShowNotes(!showNotes) },
-  ];
-
   return (
-    <div className="fixed inset-0 z-[95] flex items-end sm:items-center justify-center bg-black/70 px-4" onClick={onClose}>
-      <div className="w-full max-w-md max-h-[80vh] bg-[var(--bg-elevated)] rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col animate-slide-up" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[95] flex items-end justify-center bg-black/60" onClick={onClose}>
+      <div className="w-full max-w-lg max-h-[88vh] bg-[var(--bg-elevated)] rounded-t-2xl overflow-hidden flex flex-col animate-slide-up" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
-          <h3 className="text-sm font-bold text-[var(--text-primary)]">Thêm vào DS việc</h3>
-          <button onClick={onClose} className="text-[var(--text-muted)]"><X size={16} /></button>
+          <div>
+            <h3 className="text-sm font-bold text-[var(--text-primary)]">Thêm vào DS việc</h3>
+            <p className="text-[11px] text-[var(--text-muted)] mt-0.5 truncate max-w-[260px]">{template.isGroup ? '📂 ' : ''}{template.title}</p>
+          </div>
+          <button onClick={onClose} className="size-8 rounded-lg bg-[var(--bg-surface)] flex items-center justify-center text-[var(--text-muted)]"><X size={16} /></button>
         </div>
-        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
-          <p className="text-xs text-[var(--text-secondary)] bg-[var(--bg-surface)] rounded-lg px-3 py-2">{template.isGroup ? '📂 ' : ''}{template.title}</p>
-          <div className="grid grid-cols-2 gap-1.5">
-            {(Object.keys(QUADRANT_LABELS) as EisenhowerQuadrant[]).map(q => {
-              const cfg = QUADRANT_LABELS[q];
-              return (
-                <button key={q} onClick={() => setQuadrant(q)}
-                  className={`py-2 rounded-lg text-[10px] font-medium min-h-[34px] border flex items-center justify-center gap-1 ${quadrant === q ? 'border-current' : 'border-transparent bg-[var(--bg-surface)]'}`}
-                  style={quadrant === q ? { color: cfg.color, backgroundColor: `${cfg.color}15` } : {}}>
-                  {cfg.icon} {cfg.label}
-                </button>
-              );
-            })}
+
+        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
+          {/* Phân loại tự động */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[rgba(96,165,250,0.1)] border border-[rgba(96,165,250,0.2)]">
+            <span className="text-xs text-[#60A5FA]">⚡</span>
+            <p className="text-[10px] text-[#60A5FA] leading-tight">Phân loại tự động: có hạn trong hôm nay → <b>HÔM NAY</b>, ngày sau → <b>LÊN LỊCH</b>, không có hạn → <b>HÔM NAY</b></p>
           </div>
-          <div className="grid grid-cols-4 gap-2">
-            {toggles.map(opt => (
-              <button key={opt.key} onClick={opt.toggle}
-                className={`flex items-center gap-1.5 px-2 py-2 rounded-lg text-[10px] font-medium min-h-[34px] border ${opt.active ? 'border-[var(--border-accent)] bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-muted)]'}`}>
-                <div className={`size-3.5 rounded border flex items-center justify-center ${opt.active ? 'bg-[var(--accent-primary)] border-[var(--accent-primary)]' : 'border-[var(--text-muted)]'}`}>
-                  {opt.active && <Check size={8} className="text-[var(--bg-base)]" />}
-                </div>
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          {showDeadline && (
-            <div className="flex gap-2">
-              <input type="date" value={deadlineDate} onChange={e => setDeadlineDate(e.target.value)}
-                className="flex-1 bg-[var(--bg-surface)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[34px]" />
-              <input type="time" value={deadlineTime} onChange={e => setDeadlineTime(e.target.value)}
-                className="flex-1 bg-[var(--bg-surface)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[34px]" />
+          {/* Thời lượng dự kiến - luôn hiện, bắt buộc */}
+          <CollapsibleOption label="⏱️ Thời lượng dự kiến" active={showDuration} expanded={expandedDuration}
+            onToggle={() => { setShowDuration(!showDuration); setExpandedDuration(!showDuration); }}>
+            <div className="space-y-2 pt-3">
+              <div className="flex items-center gap-2">
+                <input type="number" min="1" max="480" value={durationMinutes}
+                  onChange={e => setDurationMinutes(Math.max(1, parseInt(e.target.value) || 30))}
+                  className="w-24 bg-[var(--bg-elevated)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[38px] font-mono"
+                  inputMode="numeric" />
+                <span className="text-sm text-[var(--text-muted)]">phút</span>
+                <span className="text-xs text-[var(--text-muted)] ml-auto">
+                  {durationMinutes >= 60 ? `${Math.floor(durationMinutes / 60)}h${durationMinutes % 60 > 0 ? `${durationMinutes % 60}p` : ''}` : `${durationMinutes} phút`}
+                </span>
+              </div>
+              <div className="flex gap-1.5 flex-wrap">
+                {[15, 30, 45, 60, 90, 120].map(m => (
+                  <button key={m} onClick={() => setDurationMinutes(m)}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-medium ${durationMinutes === m ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)] border border-[var(--border-accent)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
+                    {m >= 60 ? `${m / 60}h` : `${m}p`}
+                  </button>
+                ))}
+              </div>
             </div>
+          </CollapsibleOption>
+
+          {/* Hạn chót */}
+          <CollapsibleOption label="⏰ Hạn chót" active={showDeadline} expanded={expandedDeadline} onToggle={toggleDeadline}>
+            <div className="space-y-2 pt-3">
+              <div className="flex gap-2">
+                <input type="date" value={deadlineDate} onChange={e => setDeadlineDate(e.target.value)}
+                  className="flex-1 bg-[var(--bg-elevated)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[38px]" />
+                <input type="time" value={deadlineTime} onChange={e => setDeadlineTime(e.target.value)}
+                  className="flex-1 bg-[var(--bg-elevated)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[38px]" />
+              </div>
+              {showDeadline && (
+                <div className="px-2 py-1.5 rounded-lg bg-[var(--bg-elevated)] text-sm font-medium" style={{ color: formatTimeUntilDeadlineTpl(deadlineDate, deadlineTime).color }}>
+                  {formatTimeUntilDeadlineTpl(deadlineDate, deadlineTime).text}
+                </div>
+              )}
+            </div>
+          </CollapsibleOption>
+
+          {/* Nhắc nhở - chỉ khi có deadline */}
+          {showDeadline && (
+            <CollapsibleOption label="🔔 Nhắc nhở trước hạn" active={showReminder} expanded={expandedReminder}
+              onToggle={() => { setShowReminder(!showReminder); setExpandedReminder(!showReminder); }}>
+              <div className="space-y-3 pt-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[var(--text-muted)]">Nhắc trước</span>
+                  <select value={reminderMinutes} onChange={e => setReminderMinutes(Number(e.target.value))}
+                    className="flex-1 bg-[var(--bg-elevated)] rounded-lg px-2 py-1.5 text-sm text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[34px]">
+                    {[5, 10, 15, 30, 60, 120].map(m => (
+                      <option key={m} value={m}>{m >= 60 ? `${m / 60} giờ` : `${m} phút`}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[var(--text-muted)]">Số lần nhắc</span>
+                  <div className="flex gap-1.5 ml-auto">
+                    {[1, 2, 3].map(n => (
+                      <button key={n} onClick={() => setReminderRepeat(n)}
+                        className={`size-8 rounded-lg text-xs font-bold ${reminderRepeat === n ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)] border border-[var(--border-accent)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </CollapsibleOption>
           )}
-          {showRecurring && (
-            <div className="flex gap-1.5">
+
+          {/* Lặp lại */}
+          <CollapsibleOption label="🔁 Lặp lại" active={showRecurring} expanded={expandedRecurring}
+            onToggle={() => { setShowRecurring(!showRecurring); setExpandedRecurring(!showRecurring); }}>
+            <div className="flex gap-1.5 pt-3">
               {(['none', 'daily', 'weekdays', 'weekly'] as RecurringType[]).map(r => (
                 <button key={r} onClick={() => setRecurringType(r)}
-                  className={`flex-1 py-1.5 rounded-lg text-[9px] font-medium min-h-[30px] ${recurringType === r ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)]' : 'bg-[var(--bg-surface)] text-[var(--text-muted)]'}`}>
+                  className={`flex-1 py-2 rounded-lg text-[10px] font-medium min-h-[34px] ${recurringType === r ? 'bg-[var(--accent-dim)] text-[var(--accent-primary)] border border-[var(--border-accent)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>
                   {r === 'none' ? 'Không' : r === 'daily' ? 'Hàng ngày' : r === 'weekdays' ? 'T2-T6' : 'Hàng tuần'}
                 </button>
               ))}
             </div>
-          )}
-          {showFinance && (
-            <div className="space-y-2">
-              {/* New format: multiple finance items with categories - now default */}
-              <div className="space-y-2">
-                  {financeItems.map((item, idx) => (
-                    <div key={idx} className="bg-[var(--bg-surface)] p-2 rounded-lg border border-[var(--border-subtle)] space-y-2">
-                      <div className="flex gap-2">
-                        <select
-                          value={item.type}
-                          onChange={e => {
-                            const newItems = [...financeItems];
-                            newItems[idx] = { ...newItems[idx], type: e.target.value as 'income' | 'expense' };
-                            setFinanceItems(newItems);
-                          }}
-                          className={`rounded-lg px-2 py-1.5 text-xs font-bold outline-none border border-[var(--border-subtle)] min-h-[32px] ${
-                            item.type === 'income' ? 'bg-[var(--success)] text-white' : 'bg-[var(--error)] text-white'
-                          }`}
-                        >
-                          <option value="income">Thu</option>
-                          <option value="expense">Chi</option>
-                        </select>
-                        <input
-                          type="number"
-                          value={item.amount || ''}
-                          onChange={e => {
-                            const newItems = [...financeItems];
-                            newItems[idx] = { ...newItems[idx], amount: Math.max(0, parseInt(e.target.value) || 0) };
-                            setFinanceItems(newItems);
-                          }}
-                          placeholder="Số tiền"
-                          className="flex-1 bg-[var(--bg-elevated)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[32px] font-mono"
-                          inputMode="numeric"
-                        />
-                        <button onClick={() => {
-                          const newItems = [...financeItems];
-                          newItems.splice(idx, 1);
-                          setFinanceItems(newItems);
-                        }} className="size-8 rounded-lg bg-[var(--bg-surface)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--error)]">
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                      
-                      <div className="flex gap-2">
-                        <select
-                          value={item.category}
-                          onChange={e => {
-                            const newItems = [...financeItems];
-                            newItems[idx] = { ...newItems[idx], category: e.target.value };
-                            setFinanceItems(newItems);
-                          }}
-                          className="w-1/3 bg-[var(--bg-surface)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[32px]"
-                        >
-                          {financeCategories.map(fc => (
-                            <option key={fc.id} value={fc.id}>{fc.icon} {fc.name}</option>
-                          ))}
-                        </select>
-                        <input
-                          type="text"
-                          value={item.note || ''}
-                          onChange={e => {
-                            const newItems = [...financeItems];
-                            newItems[idx] = { ...newItems[idx], note: e.target.value };
-                            setFinanceItems(newItems);
-                          }}
-                          placeholder="Ghi chú chi tiêu..."
-                          className="flex-1 bg-[var(--bg-surface)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[32px]"
-                        />
-                      </div>
-                    </div>
-                  ))}
-                  
-                  <button 
-                    onClick={() => {
-                      setFinanceItems([
-                        ...financeItems,
-                        {
-                          id: Date.now().toString(36) + Math.random().toString(36).slice(2),
-                          type: 'expense',
-                          amount: 0,
-                          category: financeCategories[0]?.id || 'other',
-                          note: ''
-                        }
-                      ]);
-                    }}
-                    className="w-full py-2 rounded-lg border border-dashed border-[var(--border-subtle)] text-xs text-[var(--text-muted)] flex items-center justify-center gap-1 hover:bg-[var(--bg-elevated)]"
-                  >
-                    <Plus size={14} /> Thêm khoản thu/chi
-                  </button>
+          </CollapsibleOption>
+
+          {/* Thu/Chi */}
+          <CollapsibleOption label="💰 Thu/Chi" active={showFinance} expanded={expandedFinance}
+            onToggle={() => {
+              const next = !showFinance;
+              setShowFinance(next);
+              setExpandedFinance(next);
+              if (next && financeItems.length === 0) addFinanceItem();
+            }}>
+            <div className="space-y-2 pt-3">
+              {financeItems.map((item, idx) => (
+                <div key={idx} className="bg-[var(--bg-elevated)] p-2 rounded-lg border border-[var(--border-subtle)] space-y-2">
+                  <div className="flex gap-2">
+                    <select value={item.type}
+                      onChange={e => { const ni = [...financeItems]; ni[idx] = { ...ni[idx], type: e.target.value as 'income' | 'expense' }; setFinanceItems(ni); }}
+                      className={`rounded-lg px-2 py-1.5 text-xs font-bold outline-none border border-[var(--border-subtle)] min-h-[32px] ${item.type === 'income' ? 'bg-[var(--success)] text-white' : 'bg-[var(--error)] text-white'}`}>
+                      <option value="income">Thu</option>
+                      <option value="expense">Chi</option>
+                    </select>
+                    <input type="number" value={item.amount || ''}
+                      onChange={e => { const ni = [...financeItems]; ni[idx] = { ...ni[idx], amount: Math.max(0, parseInt(e.target.value) || 0) }; setFinanceItems(ni); }}
+                      placeholder="Số tiền" inputMode="numeric"
+                      className="flex-1 bg-[var(--bg-surface)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[32px] font-mono" />
+                    <button onClick={() => { const ni = [...financeItems]; ni.splice(idx, 1); setFinanceItems(ni); }}
+                      className="size-8 rounded-lg bg-[var(--bg-surface)] flex items-center justify-center text-[var(--text-muted)]">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <select value={item.category}
+                      onChange={e => { const ni = [...financeItems]; ni[idx] = { ...ni[idx], category: e.target.value }; setFinanceItems(ni); }}
+                      className="w-1/3 bg-[var(--bg-surface)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[32px]">
+                      {financeCategories.map(fc => <option key={fc.id} value={fc.id}>{fc.icon} {fc.name}</option>)}
+                    </select>
+                    <input type="text" value={item.note || ''}
+                      onChange={e => { const ni = [...financeItems]; ni[idx] = { ...ni[idx], note: e.target.value }; setFinanceItems(ni); }}
+                      placeholder="Ghi chú chi tiêu..."
+                      className="flex-1 bg-[var(--bg-surface)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none border border-[var(--border-subtle)] min-h-[32px]" />
+                  </div>
                 </div>
+              ))}
+              <button onClick={addFinanceItem}
+                className="w-full py-2 rounded-lg border border-dashed border-[var(--border-subtle)] text-xs text-[var(--text-muted)] flex items-center justify-center gap-1">
+                <Plus size={14} /> Thêm khoản thu/chi
+              </button>
             </div>
-          )}
-          {showNotes && (
+          </CollapsibleOption>
+
+          {/* Ghi chú */}
+          <CollapsibleOption label="📝 Ghi chú" active={showNotes} expanded={expandedNotes}
+            onToggle={() => { setShowNotes(!showNotes); setExpandedNotes(!showNotes); }}>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Ghi chú..." rows={2}
-              className="w-full bg-[var(--bg-surface)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none border border-[var(--border-subtle)] resize-none" />
-          )}
-          <button onClick={handleAdd} className="w-full py-3 rounded-xl text-sm font-semibold text-[var(--bg-base)] bg-[var(--accent-primary)] active:opacity-80 min-h-[44px] flex items-center justify-center gap-2">
-            <ArrowRight size={16} /> {template.isGroup ? 'Thêm toàn bộ việc đơn' : 'Nhân bản vào DS việc'}
+              className="w-full mt-3 bg-[var(--bg-elevated)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none border border-[var(--border-subtle)] resize-none" />
+          </CollapsibleOption>
+        </div>
+
+        <div className="px-4 pb-4 pt-2">
+          <button onClick={handleAdd}
+            className="w-full py-3 rounded-xl text-sm font-semibold text-[var(--bg-base)] bg-[var(--accent-primary)] active:opacity-80 min-h-[44px] flex items-center justify-center gap-2">
+            <ArrowRight size={16} /> {template.isGroup ? 'Thêm toàn bộ việc đơn' : 'Thêm vào danh sách việc'}
           </button>
         </div>
       </div>
@@ -291,14 +374,18 @@ function AddToTodoDialog({ template, onClose }: { template: TaskTemplate; onClos
 function CollapsibleOption({
   label,
   active,
+  expanded,
   onToggle,
   children,
 }: {
   label: string;
   active: boolean;
+  expanded?: boolean;
   onToggle: () => void;
   children: React.ReactNode;
 }) {
+  // If expanded is explicitly provided, use it to control visibility; otherwise use active
+  const isOpen = expanded !== undefined ? expanded : active;
   return (
     <div className="bg-[var(--bg-surface)] rounded-xl border border-[var(--border-subtle)] overflow-hidden mb-2 flex flex-col">
       <button
@@ -323,11 +410,11 @@ function CollapsibleOption({
         <ChevronDown
           size={16}
           className={`text-[var(--text-muted)] transition-transform flex-shrink-0 ${
-            active ? 'rotate-180' : ''
+            isOpen ? 'rotate-180' : ''
           }`}
         />
       </button>
-      {active && (
+      {isOpen && (
         <div className="px-4 pb-3 pt-0 border-t border-[var(--border-subtle)] flex-shrink-0 order-last">
           {children}
         </div>

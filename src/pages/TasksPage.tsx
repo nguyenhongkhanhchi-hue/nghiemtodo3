@@ -8,7 +8,7 @@ import { AddTaskSheet } from '@/components/features/AddTaskInput';
 import { updateUserLastActive } from '@/lib/userTracking';
 
 export default function TasksPage() {
-  const timer = useTaskStore(s => s.timer);
+  const timers = useTaskStore(s => s.timers);
   const tasks = useTaskStore(s => s.tasks);
   const timezone = useSettingsStore(s => s.timezone);
   const user = useAuthStore(s => s.user);
@@ -42,10 +42,12 @@ export default function TasksPage() {
   const dayName = dayNames[now.getDay()];
   const dateStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
   const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-  const hasTimer = timer.isRunning || timer.isPaused;
+  const hasActiveTimer = timers.some(t => t.isRunning || t.isPaused);
+  // Height per active timer row (~40px) + header (~24px)
+  const timerBarHeight = hasActiveTimer ? 24 + timers.filter(t => t.isRunning || t.isPaused).length * 40 : 0;
 
   return (
-    <div className="flex flex-col h-full px-4" style={{ paddingTop: hasTimer ? 'calc(60px + env(safe-area-inset-top, 0px))' : 'max(12px, env(safe-area-inset-top, 12px))' }}>
+    <div className="flex flex-col h-full px-4" style={{ paddingTop: hasActiveTimer ? `calc(${timerBarHeight}px + env(safe-area-inset-top, 0px))` : 'max(12px, env(safe-area-inset-top, 12px))' }}>
       {/* Header - notch-safe */}
       <div className="flex items-center justify-between pb-2">
         <div>
